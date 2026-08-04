@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Float
-from .database import Base
+from database import Base
 
 class AirFreightRate(Base):
     __tablename__ = "air_freight_rates"
