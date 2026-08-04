@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import FileUpload from './components/FileUpload';
 import RatesTable from './components/RatesTable';
 import './index.css';
