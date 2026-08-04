@@ -185,20 +185,26 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
 
     const brackets = ['min_rate', 'normal_rate', 'q45', 'q100', 'q300', 'q500', 'q1000', 'q3000'];
     const columnsData: Record<string, number[]> = {};
+    
+    const hasValidRate = (row: any) => brackets.some(b => row[b] !== null && row[b] !== undefined);
+    
+    // We only calculate min/max colors based on rows that ACTUALLY have rates
+    const validData = filteredData.filter(hasValidRate);
     brackets.forEach(b => {
-      columnsData[b] = filteredData.map(row => row[b]).filter(v => v !== null && v !== undefined);
+      columnsData[b] = validData.map(row => row[b]).filter(v => v !== null && v !== undefined);
     });
 
-    const expressData = filteredData.filter(r => getProductCategory(r.product) === 'KN Express');
-    const extendData = filteredData.filter(r => getProductCategory(r.product) === 'KN Extend / KN Expert');
+    const expressData = validData.filter(r => getProductCategory(r.product) === 'KN Express');
+    const extendData = validData.filter(r => getProductCategory(r.product) === 'KN Extend / KN Expert');
+    const adHocData = filteredData.filter(r => !hasValidRate(r));
 
-    const renderTableGroup = (title: string, data: any[]) => {
+    const renderTableGroup = (title: string, data: any[], color: string, showBrackets: boolean) => {
       if (!data.length) return null;
       const sorted = getSortedData(data);
       
       return (
         <div style={{ marginBottom: '32px' }}>
-          <h4 style={{ color: title === 'KN Express' ? '#f59e0b' : '#3b82f6', marginBottom: '12px', fontSize: '1.1rem', borderBottom: '1px solid #374151', paddingBottom: '8px' }}>
+          <h4 style={{ color: color, marginBottom: '12px', fontSize: '1.1rem', borderBottom: '1px solid #374151', paddingBottom: '8px' }}>
             {title} ({data.length})
           </h4>
           <div className="table-container">
@@ -208,11 +214,12 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
                   <th onClick={() => handleSort('airline')} style={{cursor: 'pointer'}}>Airline {sortField === 'airline' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</th>
                   <th onClick={() => handleSort('product')} style={{cursor: 'pointer'}}>Product {sortField === 'product' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</th>
                   <th>Via</th>
-                  {WEIGHT_BRACKETS.map(b => (
+                  {showBrackets && WEIGHT_BRACKETS.map(b => (
                     <th key={b.id} onClick={() => handleSort(b.id)} style={{cursor: 'pointer'}}>
                       {b.label} {sortField === b.id ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
                     </th>
                   ))}
+                  {!showBrackets && <th>Status</th>}
                   <th>Curr</th>
                 </tr>
               </thead>
@@ -229,11 +236,13 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
                       </td>
                       <td>{row.product || '-'}</td>
                       <td>{row.via || '-'}</td>
-                      {brackets.map(b => (
+                      {showBrackets ? brackets.map(b => (
                         <td key={b} className={getColorClass(row[b], columnsData[b])}>
                           {row[b] !== null && row[b] !== undefined ? row[b].toFixed(2) : '-'}
                         </td>
-                      ))}
+                      )) : (
+                        <td style={{color: '#f87171'}}>Check Ad-Hoc / On Request</td>
+                      )}
                       <td>{row.currency || 'USD'}</td>
                     </tr>
                   )
@@ -247,63 +256,9 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
 
     return (
       <div>
-        {renderTableGroup('KN Express', expressData)}
-        {renderTableGroup('KN Extend / KN Expert', extendData)}
-      </div>
-    );
-  };
-
-  const renderChart = () => {
-    if (!filteredData.length) return null;
-    
-    const chartData = filteredData
-      .filter(row => row[selectedBracket] !== null && row[selectedBracket] !== undefined)
-      .sort((a, b) => a[selectedBracket] - b[selectedBracket]);
-      
-    if (!chartData.length) return <div style={{padding: '20px'}}>No pricing data for this bracket.</div>;
-
-    const maxPrice = Math.max(...chartData.map(d => d[selectedBracket]));
-    const barHeight = 32;
-    const barGap = 16;
-    const svgHeight = chartData.length * (barHeight + barGap);
-
-    return (
-      <div className="chart-container">
-        <svg width="100%" height={svgHeight} style={{ minHeight: '300px' }}>
-          {chartData.map((d, i) => {
-            const widthPct = (d[selectedBracket] / maxPrice) * 100;
-            const y = i * (barHeight + barGap);
-            const isExpress = getProductCategory(d.product) === 'KN Express';
-            let fill = isExpress ? '#f59e0b' : '#3b82f6';
-            if (i === 0) fill = '#10b981'; // Absolute cheapest
-            
-            return (
-              <g key={i}>
-                <text x="0" y={y + 20} fill="#9ca3af" fontSize="12" fontFamily="Inter">
-                  {d.airline} {d.product ? `(${d.product})` : ''}
-                </text>
-                <rect 
-                  x="240" 
-                  y={y} 
-                  width={`calc(${widthPct}% - 300px)`} 
-                  height={barHeight} 
-                  fill={fill} 
-                  rx="4"
-                  className="chart-bar"
-                  style={{ width: `${Math.max(10, widthPct * 0.7)}%` }}
-                />
-                <text x={`calc(250px + ${Math.max(10, widthPct * 0.7)}%)`} y={y + 20} fill="#f9fafb" fontSize="12" fontFamily="Inter" fontWeight="bold">
-                  {d[selectedBracket].toFixed(2)} {d.currency}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-        <div style={{display: 'flex', gap: '16px', marginTop: '16px', justifyContent: 'center'}}>
-          <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}><div style={{width: 12, height: 12, backgroundColor: '#f59e0b', borderRadius: 2}}></div> KN Express</div>
-          <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}><div style={{width: 12, height: 12, backgroundColor: '#3b82f6', borderRadius: 2}}></div> KN Extend / Expert</div>
-          <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}><div style={{width: 12, height: 12, backgroundColor: '#10b981', borderRadius: 2}}></div> Absolute Cheapest</div>
-        </div>
+        {renderTableGroup('KN Express', expressData, '#f59e0b', true)}
+        {renderTableGroup('KN Extend / KN Expert', extendData, '#3b82f6', true)}
+        {renderTableGroup('Check Ad-Hoc (No published rates)', adHocData, '#9ca3af', false)}
       </div>
     );
   };
@@ -378,8 +333,9 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
       </div>
 
       <div className="glass-card">
-        <h3 style={{marginBottom: '16px', color: '#f9fafb', fontSize: '1.1rem'}}>Weight Bracket Analysis</h3>
+        <h3 style={{marginBottom: '16px', color: '#f9fafb', fontSize: '1.1rem'}}>Rate Comparison</h3>
         <div className="pills-container" style={{marginBottom: '24px'}}>
+          <span style={{color: '#9ca3af', marginRight: '12px'}}>Pricing relative to:</span>
           {WEIGHT_BRACKETS.map(b => (
             <button 
               key={b.id} 
@@ -390,12 +346,6 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
             </button>
           ))}
         </div>
-        
-        {loading ? <div style={{color: '#9ca3af'}}>Loading chart...</div> : renderChart()}
-      </div>
-
-      <div className="glass-card">
-        <h3 style={{marginBottom: '16px', color: '#f9fafb', fontSize: '1.1rem'}}>Rate Comparison</h3>
         {loading ? <div style={{color: '#9ca3af'}}>Loading table...</div> : renderComparisonTable()}
       </div>
     </div>
