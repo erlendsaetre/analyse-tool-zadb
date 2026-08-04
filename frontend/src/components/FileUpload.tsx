@@ -1,100 +1,112 @@
-import { useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
+
+const API_BASE = 'https://athletic-essence-production-5a0c.up.railway.app';
 
 interface FileUploadProps {
   onUploadSuccess: () => void;
 }
 
-const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
+export default function FileUpload({ onUploadSuccess }: FileUploadProps) {
   const [file, setFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [isDragActive, setIsDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setFile(e.target.files[0]);
-      setStatus(null);
     }
   };
 
   const handleUpload = async () => {
     if (!file) return;
-
-    setIsUploading(true);
-    setStatus(null);
-
+    
+    setLoading(true);
+    setMessage('');
+    
     const formData = new FormData();
     formData.append('file', file);
-
+    
     try {
-      // In production, this would be an environment variable
-      const response = await fetch('https://athletic-essence-production-5a0c.up.railway.app/api/upload/', {
+      const res = await fetch(`${API_BASE}/api/upload/`, {
         method: 'POST',
         body: formData,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to upload file');
+      const data = await res.json();
+      
+      if (res.ok) {
+        setMessage(`Successfully uploaded ${data.count} records from ${data.filename}.`);
+        setTimeout(() => {
+          onUploadSuccess();
+        }, 2000);
+      } else {
+        setMessage(`Error: ${data.detail || 'Upload failed'}`);
       }
-
-      const data = await response.json();
-      setStatus({ type: 'success', message: data.message });
-      setFile(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      onUploadSuccess();
-    } catch (err: any) {
-      setStatus({ type: 'error', message: err.message || 'An error occurred during upload' });
+    } catch (err) {
+      setMessage('Network error during upload.');
     } finally {
-      setIsUploading(false);
+      setLoading(false);
+    }
+  };
+
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragActive(true);
+  };
+
+  const onDragLeave = () => {
+    setIsDragActive(false);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      setFile(e.dataTransfer.files[0]);
     }
   };
 
   return (
-    <div className="upload-card">
-      <div className="upload-icon">📊</div>
-      <h2>Upload Air Freight Rates</h2>
-      <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>Upload your ML-Rates Excel file to parse and analyze.</p>
-      
-      <div>
-        <label htmlFor="file-upload" className="upload-label">
-          Choose Excel File
-        </label>
-        <input
-          id="file-upload"
-          type="file"
-          accept=".xls,.xlsx"
-          className="upload-input"
-          onChange={handleFileChange}
-          ref={fileInputRef}
-        />
-      </div>
-
-      {file && (
-        <div className="file-info">
-          Selected: <strong>{file.name}</strong>
-        </div>
-      )}
-
-      {file && (
-        <button 
-          className="upload-btn" 
-          onClick={handleUpload} 
-          disabled={isUploading}
+    <div className="view-container" style={{maxWidth: '600px', margin: '0 auto', paddingTop: '40px'}}>
+      <div className="glass-card">
+        <h2 style={{marginBottom: '24px', fontSize: '1.25rem', color: '#f9fafb'}}>Upload Rates Data</h2>
+        
+        <div 
+          className={`upload-dropzone ${isDragActive ? 'drag-active' : ''}`}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          onClick={() => fileInputRef.current?.click()}
         >
-          {isUploading ? 'Processing...' : 'Upload & Process'}
-        </button>
-      )}
-
-      {status && (
-        <div className={`status-message status-${status.type}`}>
-          {status.message}
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileChange}
+            accept=".csv,.xlsx,.xls"
+          />
+          <div className="upload-icon">📄</div>
+          {file ? (
+            <div className="upload-text">Selected: {file.name}</div>
+          ) : (
+            <>
+              <div className="upload-text">Click to select or drag and drop</div>
+              <div className="upload-hint">CSV, XLSX up to 50MB</div>
+            </>
+          )}
         </div>
-      )}
+
+        <div style={{marginTop: '24px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '16px'}}>
+          {message && <span style={{color: message.startsWith('Error') ? '#ef4444' : '#10b981', fontSize: '0.875rem'}}>{message}</span>}
+          <button 
+            className="btn btn-primary" 
+            disabled={!file || loading}
+            onClick={handleUpload}
+          >
+            {loading ? 'Uploading...' : 'Upload File'}
+          </button>
+        </div>
+      </div>
     </div>
   );
-};
-
-export default FileUpload;
+}

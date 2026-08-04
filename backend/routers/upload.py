@@ -6,10 +6,11 @@ from sqlalchemy.orm import Session
 from database import get_db
 import models, schemas
 import math
+from datetime import datetime
 
 router = APIRouter()
 
-@router.post("/", response_model=schemas.UploadResponse)
+@router.post("/", response_model=schemas.UploadCreateResponse)
 async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
     if not file.filename.endswith(('.xls', '.xlsx')):
         raise HTTPException(status_code=400, detail="Only Excel files are supported.")
@@ -17,31 +18,25 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
     try:
         contents = await file.read()
         
-        # Read the Excel file, specifically the "ML-Rates" sheet
         try:
             df = pd.read_excel(io.BytesIO(contents), sheet_name="ML-Rates")
         except ValueError:
             raise HTTPException(status_code=400, detail="Sheet 'ML-Rates' not found in the Excel file.")
 
-        # Clean the dataframe (drop empty rows)
         df.dropna(how='all', inplace=True)
         
-        # Map columns (assuming headers are in the first row or pandas inferred them)
-        # For a robust solution, we use column indices or exact names based on the schema
-        # A: Airline, B: Product, C: Origin, D: Destination, E: Via, F: Relation Kg/m3, G: Fuel, H: Security Surc, I: Fixed, J: Min, K: Normal, L: q45, M: q100, N: q300, O: q500, P: q1000, Q: q3000, R: Currency
+        # Create upload record
+        upload_record = models.Upload(
+            filename=file.filename,
+            upload_date=datetime.utcnow(),
+            record_count=0
+        )
+        db.add(upload_record)
+        db.flush()  # Get the ID
         
-        expected_columns = [
-            "Airline", "Product", "Origin", "Destination", "Via", 
-            "Relation Kg/m3", "Fuel", "Security Surc", "Fixed", "Min",
-            "Normal", "q45", "q100", "q300", "q500", "q1000", "q3000", "Currency"
-        ]
-        
-        # If headers are slightly different, we might need to map them manually.
-        # Let's just iterate over rows to be safe.
         saved_count = 0
         
         for index, row in df.iterrows():
-            # Basic validation
             airline = str(row.iloc[0])
             if pd.isna(row.iloc[0]) or airline == 'nan':
                 continue
@@ -60,6 +55,7 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
                 return str(val).strip()
             
             rate = models.AirFreightRate(
+                upload_id=upload_record.id,
                 airline=safe_str(row.iloc[0]),
                 product=safe_str(row.iloc[1]),
                 origin=safe_str(row.iloc[2]),
@@ -82,10 +78,20 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
             db.add(rate)
             saved_count += 1
             
+        upload_record.record_count = saved_count
         db.commit()
+        db.refresh(upload_record)
         
-        return schemas.UploadResponse(message=f"Successfully processed and saved {saved_count} rates.", count=saved_count)
+        return schemas.UploadCreateResponse(
+            message=f"Successfully processed and saved {saved_count} rates.",
+            count=saved_count,
+            upload_id=upload_record.id,
+            filename=upload_record.filename,
+            upload_date=upload_record.upload_date
+        )
         
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
