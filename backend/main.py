@@ -23,3 +23,7 @@ app.include_router(rates.router, prefix="/api/rates", tags=["rates"])
 @app.get("/")
 def read_root():
     return {"message": "Welcome to Air Freight Rate Analysis API"}
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
