@@ -10,7 +10,9 @@ RUN npm run build
 
 FROM node:18-alpine
 WORKDIR /app
-RUN npm install -g serve
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/server.js ./
 
-CMD serve -s dist -l ${PORT:-8080}
+CMD ["node", "server.js"]
