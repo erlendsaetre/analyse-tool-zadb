@@ -3,8 +3,8 @@ from openpyxl import load_workbook
 import io
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from sqlalchemy.orm import Session
-from ..database import get_db
-from .. import models, schemas
+from database import get_db
+import models, schemas
 import math
 
 router = APIRouter()
