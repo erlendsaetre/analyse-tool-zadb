@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 const API_BASE = 'https://athletic-essence-production-5a0c.up.railway.app';
 
@@ -21,15 +21,21 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
   const [routes, setRoutes] = useState<any[]>([]);
   const [airlines, setAirlines] = useState<string[]>([]);
   const [uploads, setUploads] = useState<any[]>([]);
+  const [comparison, setComparison] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
 
+  // Filters
   const [selectedRoute, setSelectedRoute] = useState<string>('');
   const [selectedAirline, setSelectedAirline] = useState<string>('');
   const [selectedUpload, setSelectedUpload] = useState<string>(defaultUploadId ? defaultUploadId.toString() : '');
+  const [selectedProduct, setSelectedProduct] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  
   const [selectedBracket, setSelectedBracket] = useState<string>('q100');
-
-  const [analytics, setAnalytics] = useState<any>(null);
-  const [comparison, setComparison] = useState<any[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
+  
+  // Sort State
+  const [sortField, setSortField] = useState<string>('airline');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
     fetch(`${API_BASE}/api/rates/routes`).then(r => r.json()).then(setRoutes).catch(console.error);
@@ -39,7 +45,7 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [selectedRoute, selectedAirline, selectedUpload, selectedBracket]);
+  }, [selectedRoute, selectedAirline, selectedUpload]);
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -56,18 +62,96 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
       const compRes = await fetch(`${API_BASE}/api/rates/comparison?${queryParams.toString()}`);
       const compData = await compRes.json();
       setComparison(compData);
-
-      const analParams = new URLSearchParams(queryParams.toString());
-      analParams.append('weight_bracket', selectedBracket);
-      const analRes = await fetch(`${API_BASE}/api/rates/analytics?${analParams.toString()}`);
-      const analData = await analRes.json();
-      setAnalytics(analData);
-
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
+  };
+
+  const getProductCategory = (product: string) => {
+    if (!product) return 'KN Extend / KN Expert';
+    const p = product.toLowerCase();
+    if (p.includes('flash') || p.includes('zoom') || p.includes('xps') || p.includes('express')) {
+      return 'KN Express';
+    }
+    return 'KN Extend / KN Expert';
+  };
+
+  // Compute derived data locally for immediate filtering
+  const { filteredData, products, categories, analytics } = useMemo(() => {
+    const productsSet = new Set<string>();
+    const categoriesSet = new Set<string>();
+
+    let filtered = comparison;
+
+    // Build sets for dropdowns based on current route/airline filter
+    comparison.forEach(r => {
+      if (r.product) productsSet.add(r.product);
+      categoriesSet.add(getProductCategory(r.product));
+    });
+
+    // Apply product and category filters
+    if (selectedProduct) {
+      filtered = filtered.filter(r => r.product === selectedProduct);
+    }
+    if (selectedCategory) {
+      filtered = filtered.filter(r => getProductCategory(r.product) === selectedCategory);
+    }
+
+    // Compute Analytics
+    const validPrices = filtered.map(r => r[selectedBracket]).filter(p => p !== null && p !== undefined);
+    const minPrice = validPrices.length ? Math.min(...validPrices) : null;
+    const maxPrice = validPrices.length ? Math.max(...validPrices) : null;
+    
+    let cheapestItem = null;
+    if (minPrice !== null) {
+      cheapestItem = filtered.find(r => r[selectedBracket] === minPrice);
+    }
+
+    const airlinesWithPrices = new Set(filtered.filter(r => r[selectedBracket] !== null && r[selectedBracket] !== undefined).map(r => r.airline));
+    const allAirlines = new Set(filtered.map(r => r.airline));
+
+    const computedAnalytics = {
+      total_rates: filtered.length,
+      airlines_with_prices: airlinesWithPrices.size,
+      total_airlines: allAirlines.size,
+      cheapest_airline: cheapestItem?.airline || '-',
+      cheapest_product: cheapestItem?.product || '-',
+      cheapest_price: minPrice,
+      price_range_min: minPrice,
+      price_range_max: maxPrice,
+    };
+
+    return { 
+      filteredData: filtered, 
+      products: Array.from(productsSet).sort(), 
+      categories: Array.from(categoriesSet).sort(),
+      analytics: computedAnalytics
+    };
+  }, [comparison, selectedProduct, selectedCategory, selectedBracket]);
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const getSortedData = (data: any[]) => {
+    return [...data].sort((a, b) => {
+      let valA = a[sortField];
+      let valB = b[sortField];
+
+      if (valA === null || valA === undefined) valA = sortDirection === 'asc' ? Infinity : -Infinity;
+      if (valB === null || valB === undefined) valB = sortDirection === 'asc' ? Infinity : -Infinity;
+
+      if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+      if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
   };
 
   const getColorClass = (val: number | null, columnPrices: number[]) => {
@@ -81,7 +165,6 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
     if (val === min) return 'price-best';
     if (val === max) return 'price-worst';
     
-    // Percentiles
     validPrices.sort((a, b) => a - b);
     const q25 = validPrices[Math.floor(validPrices.length * 0.25)];
     const q75 = validPrices[Math.floor(validPrices.length * 0.75)];
@@ -91,57 +174,89 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
     return 'price-mid';
   };
 
+  const getIataCode = (airline: string) => {
+    const match = airline.split(' - ')[0];
+    if (match && match.length === 2) return match;
+    return '';
+  };
+
   const renderComparisonTable = () => {
-    if (!comparison.length) return <div style={{padding: '20px', color: '#9ca3af'}}>No data available for the selected filters.</div>;
+    if (!filteredData.length) return <div style={{padding: '20px', color: '#9ca3af'}}>No data available for the selected filters.</div>;
 
     const brackets = ['min_rate', 'normal_rate', 'q45', 'q100', 'q300', 'q500', 'q1000', 'q3000'];
     const columnsData: Record<string, number[]> = {};
     brackets.forEach(b => {
-      columnsData[b] = comparison.map(row => row[b]).filter(v => v !== null && v !== undefined);
+      columnsData[b] = filteredData.map(row => row[b]).filter(v => v !== null && v !== undefined);
     });
 
-    const sortedComparison = [...comparison].sort((a, b) => {
-      const valA = a[selectedBracket] ?? Infinity;
-      const valB = b[selectedBracket] ?? Infinity;
-      return valA - valB;
-    });
+    const expressData = filteredData.filter(r => getProductCategory(r.product) === 'KN Express');
+    const extendData = filteredData.filter(r => getProductCategory(r.product) === 'KN Extend / KN Expert');
+
+    const renderTableGroup = (title: string, data: any[]) => {
+      if (!data.length) return null;
+      const sorted = getSortedData(data);
+      
+      return (
+        <div style={{ marginBottom: '32px' }}>
+          <h4 style={{ color: title === 'KN Express' ? '#f59e0b' : '#3b82f6', marginBottom: '12px', fontSize: '1.1rem', borderBottom: '1px solid #374151', paddingBottom: '8px' }}>
+            {title} ({data.length})
+          </h4>
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th onClick={() => handleSort('airline')} style={{cursor: 'pointer'}}>Airline {sortField === 'airline' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</th>
+                  <th onClick={() => handleSort('product')} style={{cursor: 'pointer'}}>Product {sortField === 'product' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</th>
+                  <th>Via</th>
+                  {WEIGHT_BRACKETS.map(b => (
+                    <th key={b.id} onClick={() => handleSort(b.id)} style={{cursor: 'pointer'}}>
+                      {b.label} {sortField === b.id ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                    </th>
+                  ))}
+                  <th>Curr</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((row, idx) => {
+                  const iata = getIataCode(row.airline);
+                  return (
+                    <tr key={idx}>
+                      <td>
+                        <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                          {iata && <img src={`https://images.kiwi.com/airlines/64/${iata}.png`} alt={iata} width="24" height="24" style={{borderRadius: '4px'}} onError={(e) => (e.currentTarget.style.display = 'none')} />}
+                          {row.airline}
+                        </div>
+                      </td>
+                      <td>{row.product || '-'}</td>
+                      <td>{row.via || '-'}</td>
+                      {brackets.map(b => (
+                        <td key={b} className={getColorClass(row[b], columnsData[b])}>
+                          {row[b] !== null && row[b] !== undefined ? row[b].toFixed(2) : '-'}
+                        </td>
+                      ))}
+                      <td>{row.currency || 'USD'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    };
 
     return (
-      <div className="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th>Airline</th>
-              <th>Product</th>
-              <th>Via</th>
-              {WEIGHT_BRACKETS.map(b => <th key={b.id}>{b.label}</th>)}
-              <th>Curr</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedComparison.map((row, idx) => (
-              <tr key={idx}>
-                <td>{row.airline}</td>
-                <td>{row.product || '-'}</td>
-                <td>{row.via || '-'}</td>
-                {brackets.map(b => (
-                  <td key={b} className={getColorClass(row[b], columnsData[b])}>
-                    {row[b] !== null && row[b] !== undefined ? row[b].toFixed(2) : '-'}
-                  </td>
-                ))}
-                <td>{row.currency || 'USD'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div>
+        {renderTableGroup('KN Express', expressData)}
+        {renderTableGroup('KN Extend / KN Expert', extendData)}
       </div>
     );
   };
 
   const renderChart = () => {
-    if (!comparison.length) return null;
+    if (!filteredData.length) return null;
     
-    const chartData = comparison
+    const chartData = filteredData
       .filter(row => row[selectedBracket] !== null && row[selectedBracket] !== undefined)
       .sort((a, b) => a[selectedBracket] - b[selectedBracket]);
       
@@ -158,9 +273,9 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
           {chartData.map((d, i) => {
             const widthPct = (d[selectedBracket] / maxPrice) * 100;
             const y = i * (barHeight + barGap);
-            let fill = '#3b82f6'; // mid
-            if (i === 0) fill = '#10b981'; // cheapest
-            if (i === chartData.length - 1 && chartData.length > 1) fill = '#ef4444'; // expensive
+            const isExpress = getProductCategory(d.product) === 'KN Express';
+            let fill = isExpress ? '#f59e0b' : '#3b82f6';
+            if (i === 0) fill = '#10b981'; // Absolute cheapest
             
             return (
               <g key={i}>
@@ -168,22 +283,27 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
                   {d.airline} {d.product ? `(${d.product})` : ''}
                 </text>
                 <rect 
-                  x="180" 
+                  x="240" 
                   y={y} 
-                  width={`calc(${widthPct}% - 240px)`} 
+                  width={`calc(${widthPct}% - 300px)`} 
                   height={barHeight} 
                   fill={fill} 
                   rx="4"
                   className="chart-bar"
                   style={{ width: `${Math.max(10, widthPct * 0.7)}%` }}
                 />
-                <text x={`calc(190px + ${Math.max(10, widthPct * 0.7)}%)`} y={y + 20} fill="#f9fafb" fontSize="12" fontFamily="Inter" fontWeight="bold">
+                <text x={`calc(250px + ${Math.max(10, widthPct * 0.7)}%)`} y={y + 20} fill="#f9fafb" fontSize="12" fontFamily="Inter" fontWeight="bold">
                   {d[selectedBracket].toFixed(2)} {d.currency}
                 </text>
               </g>
             );
           })}
         </svg>
+        <div style={{display: 'flex', gap: '16px', marginTop: '16px', justifyContent: 'center'}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}><div style={{width: 12, height: 12, backgroundColor: '#f59e0b', borderRadius: 2}}></div> KN Express</div>
+          <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}><div style={{width: 12, height: 12, backgroundColor: '#3b82f6', borderRadius: 2}}></div> KN Extend / Expert</div>
+          <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}><div style={{width: 12, height: 12, backgroundColor: '#10b981', borderRadius: 2}}></div> Absolute Cheapest</div>
+        </div>
       </div>
     );
   };
@@ -208,7 +328,21 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
           </select>
         </div>
         <div className="filter-group">
-          <label className="filter-label">Upload Date</label>
+          <label className="filter-label">Category</label>
+          <select value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>
+            <option value="">All Categories</option>
+            {categories.map((c, i) => <option key={i} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div className="filter-group">
+          <label className="filter-label">Product</label>
+          <select value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)}>
+            <option value="">All Products</option>
+            {products.map((p, i) => <option key={i} value={p}>{p}</option>)}
+          </select>
+        </div>
+        <div className="filter-group">
+          <label className="filter-label">Upload</label>
           <select value={selectedUpload} onChange={e => setSelectedUpload(e.target.value)}>
             <option value="">All Time</option>
             {uploads.map(u => (
@@ -237,7 +371,7 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
         <div className="glass-card summary-card amber">
           <div className="summary-label">Price Range ({selectedBracket})</div>
           <div className="summary-value" style={{fontSize: '1.25rem'}}>
-            {analytics?.price_range_min ? `${analytics.price_range_min} - ${analytics.price_range_max}` : '-'}
+            {analytics?.price_range_min ? `${analytics.price_range_min.toFixed(2)} - ${analytics.price_range_max?.toFixed(2)}` : '-'}
           </div>
           <div className="summary-subtext">Min to Max spread</div>
         </div>
