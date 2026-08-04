@@ -30,7 +30,7 @@ const RatesTable: React.FC = () => {
   const fetchRates = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/rates/');
+      const response = await fetch('https://athletic-essence-production-5a0c.up.railway.app/api/rates/');
       if (!response.ok) {
         throw new Error('Failed to fetch rates');
       }

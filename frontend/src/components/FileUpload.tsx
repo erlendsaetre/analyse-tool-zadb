@@ -28,7 +28,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
 
     try {
       // In production, this would be an environment variable
-      const response = await fetch('http://localhost:8000/api/upload/', {
+      const response = await fetch('https://athletic-essence-production-5a0c.up.railway.app/api/upload/', {
         method: 'POST',
         body: formData,
       });
