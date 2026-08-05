@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 
 const API_BASE = 'https://athletic-essence-production-5a0c.up.railway.app';
 
@@ -8,44 +8,55 @@ interface TenderWorkspaceProps {
 }
 
 const BRACKETS = [
-  { cost: 'cost_min', markup: 'markup_min', label: 'Min' },
-  { cost: 'cost_normal', markup: 'markup_normal', label: 'Normal' },
-  { cost: 'cost_q45', markup: 'markup_q45', label: '+45' },
-  { cost: 'cost_q100', markup: 'markup_q100', label: '+100' },
-  { cost: 'cost_q300', markup: 'markup_q300', label: '+300' },
-  { cost: 'cost_q500', markup: 'markup_q500', label: '+500' },
-  { cost: 'cost_q1000', markup: 'markup_q1000', label: '+1000' },
-  { cost: 'cost_q3000', markup: 'markup_q3000', label: '+3000' },
+  { cost: 'cost_min',    markup: 'markup_min',    label: 'Min' },
+  { cost: 'cost_normal', markup: 'markup_normal',  label: 'Normal' },
+  { cost: 'cost_q45',   markup: 'markup_q45',     label: '+45' },
+  { cost: 'cost_q100',  markup: 'markup_q100',    label: '+100' },
+  { cost: 'cost_q300',  markup: 'markup_q300',    label: '+300' },
+  { cost: 'cost_q500',  markup: 'markup_q500',    label: '+500' },
+  { cost: 'cost_q1000', markup: 'markup_q1000',   label: '+1000' },
+  { cost: 'cost_q3000', markup: 'markup_q3000',   label: '+3000' },
 ];
 
-const WEIGHT_THRESHOLDS = [
-  { min: 3000, bracket: 'cost_q3000', label: '+3000kg' },
-  { min: 1000, bracket: 'cost_q1000', label: '+1000kg' },
-  { min: 500, bracket: 'cost_q500', label: '+500kg' },
-  { min: 300, bracket: 'cost_q300', label: '+300kg' },
-  { min: 100, bracket: 'cost_q100', label: '+100kg' },
-  { min: 45, bracket: 'cost_q45', label: '+45kg' },
-  { min: 0, bracket: 'cost_normal', label: 'Normal' },
-];
+const STATUS_OPTIONS = ['draft','active','submitted','won','lost','expired'];
+
+function daysUntil(d: string | null | undefined): number | null {
+  if (!d) return null;
+  return Math.ceil((new Date(d).getTime() - Date.now()) / 86400000);
+}
+
+function toDateInputValue(iso: string | null | undefined): string {
+  if (!iso) return '';
+  return iso.substring(0, 10);
+}
 
 export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspaceProps) {
   const [tender, setTender] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
-
-  // Markup local state
   const [markups, setMarkups] = useState<Record<string, number>>({});
 
+  // Import panel
+  const [showImport, setShowImport] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importNotes, setImportNotes] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Simulator
-  const [actualWeight, setActualWeight] = useState<string>('');
-  const [volumeWeight, setVolumeWeight] = useState<string>('');
+  const [actualWeight, setActualWeight] = useState('');
+  const [volumeWeight, setVolumeWeight] = useState('');
 
   // Copy config
   const [copyBrackets, setCopyBrackets] = useState<Record<string, boolean>>({
     cost_min: true, cost_normal: true, cost_q45: true, cost_q100: true,
-    cost_q300: true, cost_q500: true, cost_q1000: true, cost_q3000: true
+    cost_q300: true, cost_q500: true, cost_q1000: true, cost_q3000: true,
   });
   const [copyMode, setCopyMode] = useState<'cost' | 'selling'>('selling');
+  const [copyWithMeta, setCopyWithMeta] = useState(true);
+
+  // Active tab
+  const [tab, setTab] = useState<'rates' | 'simulator' | 'copy'>('rates');
 
   const fetchTender = async () => {
     try {
@@ -53,12 +64,12 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
       const data = await res.json();
       setTender(data);
       setMarkups({
-        markup_min: data.markup_min || 0,
+        markup_min:   data.markup_min   || 0,
         markup_normal: data.markup_normal || 0,
-        markup_q45: data.markup_q45 || 0,
-        markup_q100: data.markup_q100 || 0,
-        markup_q300: data.markup_q300 || 0,
-        markup_q500: data.markup_q500 || 0,
+        markup_q45:   data.markup_q45   || 0,
+        markup_q100:  data.markup_q100  || 0,
+        markup_q300:  data.markup_q300  || 0,
+        markup_q500:  data.markup_q500  || 0,
         markup_q1000: data.markup_q1000 || 0,
         markup_q3000: data.markup_q3000 || 0,
       });
@@ -70,333 +81,473 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
 
   const showToast = (msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(''), 2000);
+    setTimeout(() => setToast(''), 2500);
   };
 
   const updateTender = async (updates: Record<string, any>) => {
-    try {
-      await fetch(`${API_BASE}/api/tenders/${tenderId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
-      });
-    } catch (e) { console.error(e); }
+    await fetch(`${API_BASE}/api/tenders/${tenderId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
   };
 
   const saveMarkups = async () => {
     await updateTender(markups);
-    showToast('Markup saved');
+    showToast('Markup lagret ✓');
   };
 
   const deleteRate = async (rateId: number) => {
-    try {
-      await fetch(`${API_BASE}/api/tenders/${tenderId}/rates/${rateId}`, { method: 'DELETE' });
-      fetchTender();
-    } catch (e) { console.error(e); }
+    await fetch(`${API_BASE}/api/tenders/${tenderId}/rates/${rateId}`, { method: 'DELETE' });
+    fetchTender();
   };
 
-  const updateRateNotes = async (rateId: number, notes: string) => {
+  const updateRateField = async (rateId: number, updates: Record<string, any>) => {
+    await fetch(`${API_BASE}/api/tenders/${tenderId}/rates/${rateId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+  };
+
+  const handleImport = async () => {
+    if (!importFile) return;
+    setIsImporting(true);
     try {
-      await fetch(`${API_BASE}/api/tenders/${tenderId}/rates/${rateId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes })
-      });
-    } catch (e) { console.error(e); }
+      const fd = new FormData();
+      fd.append('file', importFile);
+      fd.append('format_type', 'kn_row_based');
+      if (importNotes) fd.append('import_notes', importNotes);
+
+      const res = await fetch(`${API_BASE}/api/tenders/${tenderId}/import`, { method: 'POST', body: fd });
+      if (!res.ok) {
+        const err = await res.json();
+        showToast(`Feil: ${err.detail}`);
+        return;
+      }
+      const data = await res.json();
+      showToast(`✓ Importert ${data.lane_count} lanes`);
+      setShowImport(false);
+      setImportFile(null);
+      setImportNotes('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      fetchTender();
+    } catch (e) { showToast('Importfeil'); }
+    finally { setIsImporting(false); }
   };
 
   const getSelling = (cost: number | null, markupKey: string) => {
-    if (cost === null || cost === undefined) return null;
-    const pct = markups[markupKey] || 0;
-    return cost * (1 + pct / 100);
+    if (cost == null) return null;
+    return cost * (1 + (markups[markupKey] || 0) / 100);
   };
 
-  const getIataCode = (airline: string) => {
-    const code = airline.split(' - ')[0];
-    return (code && code.length === 2) ? code : '';
-  };
-
-  // Simulator calculations
+  // Simulator
+  const chargeableWeight = Math.max(parseFloat(actualWeight) || 0, parseFloat(volumeWeight) || 0);
   const simResults = useMemo(() => {
-    if (!tender || !actualWeight && !volumeWeight) return [];
-    const aw = parseFloat(actualWeight) || 0;
-    const vw = parseFloat(volumeWeight) || 0;
-    const cw = Math.max(aw, vw);
-    if (cw <= 0) return [];
-
-    // Find applicable bracket
-    let bracketKey = 'cost_normal';
-    let bracketLabel = 'Normal';
-    for (const t of WEIGHT_THRESHOLDS) {
-      if (cw >= t.min && t.min > 0) {
-        bracketKey = t.bracket;
-        bracketLabel = t.label;
-        break;
-      }
-    }
-
-    const markupKey = bracketKey.replace('cost_', 'markup_');
+    if (!tender || chargeableWeight <= 0) return [];
+    const thresholds = [
+      { min: 3000, costKey: 'cost_q3000', markupKey: 'markup_q3000', label: '+3000kg' },
+      { min: 1000, costKey: 'cost_q1000', markupKey: 'markup_q1000', label: '+1000kg' },
+      { min: 500,  costKey: 'cost_q500',  markupKey: 'markup_q500',  label: '+500kg' },
+      { min: 300,  costKey: 'cost_q300',  markupKey: 'markup_q300',  label: '+300kg' },
+      { min: 100,  costKey: 'cost_q100',  markupKey: 'markup_q100',  label: '+100kg' },
+      { min: 45,   costKey: 'cost_q45',   markupKey: 'markup_q45',   label: '+45kg' },
+      { min: 0,    costKey: 'cost_normal',markupKey: 'markup_normal', label: 'Normal' },
+    ];
+    const bracket = thresholds.find(t => chargeableWeight >= t.min)!;
 
     return (tender.rates || [])
-      .filter((r: any) => r[bracketKey] !== null && r[bracketKey] !== undefined)
+      .filter((r: any) => r[bracket.costKey] != null)
       .map((r: any) => {
-        const costRate = r[bracketKey];
-        const totalCost = costRate * cw;
-        const sellRate = getSelling(costRate, markupKey);
-        const totalSell = sellRate ? sellRate * cw : null;
-        const margin = totalSell && totalCost ? totalSell - totalCost : null;
+        const costRate = r[bracket.costKey];
+        const sellRate = getSelling(costRate, bracket.markupKey);
         return {
-          airline: r.airline,
-          product: r.product,
-          origin: r.origin,
-          destination: r.destination,
-          costRate,
-          totalCost,
-          sellRate,
-          totalSell,
-          margin,
-          cw,
-          bracketLabel,
-          currency: r.currency
+          ...r,
+          bracketLabel: bracket.label,
+          costRate, totalCost: costRate * chargeableWeight,
+          sellRate, totalSell: sellRate ? sellRate * chargeableWeight : null,
+          margin: sellRate ? (sellRate - costRate) * chargeableWeight : null,
         };
       })
-      .sort((a: any, b: any) => a.costRate - b.costRate);
+      .sort((a: any, b: any) => a.totalCost - b.totalCost);
   }, [tender, actualWeight, volumeWeight, markups]);
 
-  const chargeableWeight = Math.max(parseFloat(actualWeight) || 0, parseFloat(volumeWeight) || 0);
-
-  const copyRateToClipboard = (rate: any, includeMeta: boolean) => {
+  const copyRateToClipboard = (rate: any) => {
     const parts: string[] = [];
-    if (includeMeta) {
-      const iata = getIataCode(rate.airline);
+    if (copyWithMeta) {
+      const iata = rate.airline?.split(',')[0]?.trim() || '';
       parts.push(iata, rate.origin || '', rate.destination || '', rate.via || '');
     }
     parts.push(rate.currency || 'NOK');
-    
     BRACKETS.forEach(b => {
-      if (copyBrackets[b.cost]) {
-        const cost = rate[b.cost];
-        if (copyMode === 'selling') {
-          const sell = getSelling(cost, b.markup);
-          parts.push(sell !== null ? sell.toFixed(2) : '');
-        } else {
-          parts.push(cost !== null && cost !== undefined ? cost.toFixed(2) : '');
-        }
-      }
+      if (!copyBrackets[b.cost]) return;
+      const cost = rate[b.cost];
+      const val = copyMode === 'selling' ? getSelling(cost, b.markup) : cost;
+      parts.push(val != null ? val.toFixed(2) : '');
     });
-
     navigator.clipboard.writeText(parts.join('\t'));
-    showToast('Copied to clipboard!');
+    showToast('Kopiert til utklippstavle ✓');
+  };
+
+  // Rate expiry info
+  const getRateExpiryStatus = (rate: any) => {
+    const days = daysUntil(rate.valid_until || tender?.valid_until);
+    if (days === null) return null;
+    if (days < 0) return { label: `Expired`, color: '#f87171' };
+    if (days <= 7) return { label: `${days}d left`, color: '#f59e0b' };
+    return { label: `${days}d`, color: '#6b7280' };
   };
 
   if (loading) return <div style={{ color: '#9ca3af', padding: '32px' }}>Loading tender...</div>;
-  if (!tender) return <div style={{ color: '#f87171', padding: '32px' }}>Tender not found</div>;
+  if (!tender) return <div style={{ color: '#f87171', padding: '32px' }}>Tender ikke funnet</div>;
+
+  const tenderDays = daysUntil(tender.valid_until);
 
   return (
     <div className="view-container">
       {toast && <div className="toast">{toast}</div>}
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
-        <button className="btn back-btn" onClick={onBack}>← Back</button>
-        <span className="status-badge" style={{
-          backgroundColor: tender.status === 'active' ? '#3b82f622' : tender.status === 'completed' ? '#10b98122' : '#6b728022',
-          color: tender.status === 'active' ? '#3b82f6' : tender.status === 'completed' ? '#10b981' : '#6b7280',
-          borderColor: tender.status === 'active' ? '#3b82f644' : tender.status === 'completed' ? '#10b98144' : '#6b728044'
-        }}>{tender.status}</span>
+      {/* ── Header ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
+        <button className="btn back-btn" onClick={onBack}>← Tilbake</button>
+        <select
+          defaultValue={tender.status}
+          onChange={e => { updateTender({ status: e.target.value }); fetchTender(); }}
+          style={{ fontSize: '0.8rem', padding: '4px 8px', borderRadius: '6px', background: 'var(--bg-secondary)', color: '#f9fafb', border: '1px solid var(--border-color)' }}>
+          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+        </select>
+        {tenderDays !== null && (
+          <span style={{
+            fontSize: '0.8rem', fontWeight: 600, padding: '3px 10px', borderRadius: '12px',
+            color: tenderDays < 0 ? '#f87171' : tenderDays <= 7 ? '#f59e0b' : '#10b981',
+            background: tenderDays < 0 ? '#f8717122' : tenderDays <= 7 ? '#f59e0b22' : '#10b98122',
+          }}>
+            {tenderDays < 0 ? `⚠ Utløpt for ${Math.abs(tenderDays)} dager siden` : `⏰ ${tenderDays} dager igjen`}
+          </span>
+        )}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+          <button className="btn" style={{ fontSize: '0.8rem' }} onClick={() => setShowImport(!showImport)}>
+            📂 Import Excel
+          </button>
+        </div>
       </div>
 
-      {/* Tender Info */}
-      <div className="glass-card" style={{ marginBottom: '24px' }}>
-        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '16px' }}>
-          <div className="filter-group" style={{ flex: 2 }}>
-            <label className="filter-label">Tender Name</label>
+      {/* ── Tender Info ── */}
+      <div className="glass-card" style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
+          <div className="filter-group" style={{ flex: 3, minWidth: '160px' }}>
+            <label className="filter-label">Tender navn</label>
             <input type="text" className="text-input" defaultValue={tender.name}
               onBlur={e => updateTender({ name: e.target.value })} />
           </div>
-          <div className="filter-group" style={{ flex: 3 }}>
-            <label className="filter-label">Description</label>
-            <input type="text" className="text-input" defaultValue={tender.description || ''}
-              onBlur={e => updateTender({ description: e.target.value })} />
+          <div className="filter-group" style={{ flex: 2, minWidth: '140px' }}>
+            <label className="filter-label">Kunde</label>
+            <input type="text" className="text-input" defaultValue={tender.customer || ''}
+              onBlur={e => updateTender({ customer: e.target.value })} placeholder="Kundenavn..." />
           </div>
-          <div className="filter-group">
-            <label className="filter-label">Status</label>
-            <select defaultValue={tender.status} onChange={e => updateTender({ status: e.target.value })}>
-              <option value="draft">Draft</option>
-              <option value="active">Active</option>
-              <option value="completed">Completed</option>
-            </select>
+          <div className="filter-group" style={{ flex: 2, minWidth: '120px' }}>
+            <label className="filter-label">Gyldig fra</label>
+            <input type="date" className="text-input" defaultValue={toDateInputValue(tender.valid_from)}
+              onBlur={e => updateTender({ valid_from: e.target.value || null })} />
+          </div>
+          <div className="filter-group" style={{ flex: 2, minWidth: '120px' }}>
+            <label className="filter-label">Gyldig til / Frist</label>
+            <input type="date" className="text-input" defaultValue={toDateInputValue(tender.valid_until)}
+              onBlur={e => { updateTender({ valid_until: e.target.value || null }); setTimeout(fetchTender, 300); }} />
           </div>
         </div>
+
+        {/* System URL */}
+        <div className="filter-group" style={{ marginBottom: '12px' }}>
+          <label className="filter-label">Systemlenke (TE Connect / Siouxfalls etc.)</label>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input type="url" className="text-input" defaultValue={tender.tender_url || ''}
+              onBlur={e => updateTender({ tender_url: e.target.value || null })}
+              placeholder="https://teconnect.te.com/tender/..." />
+            {tender.tender_url && (
+              <a href={tender.tender_url} target="_blank" rel="noopener noreferrer"
+                className="btn" style={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                🔗 Åpne
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* Notes */}
         <div className="filter-group">
-          <label className="filter-label">Notes & Assessments</label>
+          <label className="filter-label">Notater & vurderinger</label>
           <textarea className="notes-textarea" defaultValue={tender.notes || ''}
             onBlur={e => updateTender({ notes: e.target.value })}
-            placeholder="Write your notes, assessments, and observations here..." rows={3} />
+            placeholder="Skriv dine vurderinger, strategi, observasjoner..." rows={3} />
         </div>
       </div>
 
-      {/* Markup Configuration */}
-      <div className="glass-card" style={{ marginBottom: '24px' }}>
-        <h3 style={{ color: '#f9fafb', fontSize: '1.1rem', marginBottom: '16px' }}>Markup % per Weight Bracket</h3>
+      {/* ── Import Panel ── */}
+      {showImport && (
+        <div className="glass-card" style={{ marginBottom: '20px', border: '1px dashed #3b82f666' }}>
+          <h3 style={{ color: '#f9fafb', fontSize: '1rem', marginBottom: '12px' }}>📂 Import Excel-fil</h3>
+          <div style={{ color: '#9ca3af', fontSize: '0.8rem', marginBottom: '12px' }}>
+            Støtter KN standard eksportformat (må inneholde et "Row_based" ark med headers på rad 12).
+            Innholdet legges til denne tenderen uten å slette eksisterende rater.
+          </div>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div className="filter-group" style={{ flex: 3 }}>
+              <label className="filter-label">Velg fil (.xlsx / .xls)</label>
+              <input ref={fileInputRef} type="file" accept=".xls,.xlsx" className="text-input"
+                style={{ padding: '6px' }}
+                onChange={e => setImportFile(e.target.files?.[0] || null)} />
+            </div>
+            <div className="filter-group" style={{ flex: 2 }}>
+              <label className="filter-label">Notat (valgfritt)</label>
+              <input type="text" className="text-input" value={importNotes} onChange={e => setImportNotes(e.target.value)}
+                placeholder="F.eks. Første innhenting, Rev.2..." />
+            </div>
+            <button className="btn btn-primary" onClick={handleImport}
+              disabled={!importFile || isImporting} style={{ whiteSpace: 'nowrap' }}>
+              {isImporting ? 'Importerer...' : `Import${importFile ? ` "${importFile.name}"` : ''}`}
+            </button>
+          </div>
+
+          {/* Import history */}
+          {tender.imports && tender.imports.length > 0 && (
+            <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+              <div style={{ color: '#9ca3af', fontSize: '0.75rem', marginBottom: '8px' }}>Tidligere importer:</div>
+              {tender.imports.map((imp: any) => (
+                <div key={imp.id} style={{ display: 'flex', gap: '12px', alignItems: 'center', fontSize: '0.8rem', color: '#6b7280', padding: '4px 0' }}>
+                  <span>📄 {imp.filename}</span>
+                  <span>·</span>
+                  <span>{imp.lane_count} lanes</span>
+                  <span>·</span>
+                  <span>{new Date(imp.imported_at).toLocaleDateString('no', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                  {imp.notes && <span style={{ color: '#4b5563' }}>· {imp.notes}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Markup ── */}
+      <div className="glass-card" style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <h3 style={{ color: '#f9fafb', fontSize: '1rem', fontWeight: 600 }}>Markup % per vektklasse</h3>
+          <button className="btn" style={{ fontSize: '0.75rem', padding: '4px 10px' }} onClick={saveMarkups}>Lagre</button>
+        </div>
         <div className="markup-row">
           {BRACKETS.map(b => (
-            <div key={b.markup} className="filter-group" style={{ textAlign: 'center' }}>
-              <label className="filter-label">{b.label}</label>
-              <input type="number" className="markup-input"
-                value={markups[b.markup] || 0}
+            <div key={b.markup} style={{ textAlign: 'center' }}>
+              <div className="filter-label">{b.label}</div>
+              <input type="number" className="markup-input" step="0.5"
+                value={markups[b.markup] ?? 0}
                 onChange={e => setMarkups({ ...markups, [b.markup]: parseFloat(e.target.value) || 0 })}
-                onBlur={saveMarkups}
-                step="0.5" />
-              <span style={{ color: '#6b7280', fontSize: '0.7rem' }}>%</span>
+                onBlur={saveMarkups} />
+              <div style={{ color: '#6b7280', fontSize: '0.7rem', marginTop: '2px' }}>%</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Rates Table */}
-      <div className="glass-card" style={{ marginBottom: '24px' }}>
-        <h3 style={{ color: '#f9fafb', fontSize: '1.1rem', marginBottom: '16px' }}>
-          Rates ({tender.rates?.length || 0})
-        </h3>
-        {(!tender.rates || tender.rates.length === 0) ? (
-          <div style={{ color: '#9ca3af', textAlign: 'center', padding: '32px' }}>
-            No rates added yet. Go to Dashboard and click ➕ to add rates to this tender.
-          </div>
-        ) : (
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Airline</th>
-                  <th>Product</th>
-                  <th>Lane</th>
-                  <th>Via</th>
-                  {BRACKETS.map(b => <th key={b.cost}>{b.label}</th>)}
-                  <th>Curr</th>
-                  <th>Notes</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {tender.rates.map((rate: any) => {
-                  const iata = getIataCode(rate.airline);
-                  return (
-                    <React.Fragment key={rate.id}>
-                      {/* Cost Row */}
-                      <tr className="cost-row">
-                        <td rowSpan={2}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            {iata && <img src={`https://images.kiwi.com/airlines/64/${iata}.png`} alt={iata} width="20" height="20" style={{ borderRadius: '3px' }} onError={e => (e.currentTarget.style.display = 'none')} />}
-                            <span style={{ fontSize: '0.8rem' }}>{rate.airline}</span>
-                          </div>
-                        </td>
-                        <td rowSpan={2} style={{ fontSize: '0.8rem' }}>{rate.product || '-'}</td>
-                        <td rowSpan={2} style={{ fontSize: '0.75rem', color: '#9ca3af' }}>{rate.origin}→{rate.destination}</td>
-                        <td rowSpan={2} style={{ fontSize: '0.75rem' }}>{rate.via || '-'}</td>
-                        {BRACKETS.map(b => (
-                          <td key={b.cost} style={{ fontSize: '0.8rem' }}>
-                            {rate[b.cost] !== null && rate[b.cost] !== undefined ? rate[b.cost].toFixed(2) : '-'}
-                          </td>
-                        ))}
-                        <td rowSpan={2} style={{ fontSize: '0.75rem' }}>{rate.currency || 'NOK'}</td>
-                        <td rowSpan={2}>
-                          <input type="text" className="text-input" style={{ width: '100px', fontSize: '0.75rem', padding: '4px 6px' }}
-                            defaultValue={rate.notes || ''} placeholder="..."
-                            onBlur={e => updateRateNotes(rate.id, e.target.value)} />
-                        </td>
-                        <td rowSpan={2}>
-                          <button className="btn btn-danger" style={{ padding: '2px 8px', fontSize: '0.7rem' }} onClick={() => deleteRate(rate.id)}>✕</button>
-                        </td>
-                      </tr>
-                      {/* Selling Row */}
-                      <tr className="sell-row">
-                        {BRACKETS.map(b => {
-                          const sell = getSelling(rate[b.cost], b.markup);
-                          return (
-                            <td key={b.cost + '_sell'} style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 600 }}>
-                              {sell !== null ? sell.toFixed(2) : '-'}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-            <div style={{ padding: '8px 16px', display: 'flex', gap: '8px', alignItems: 'center', borderTop: '1px solid var(--border-color)', fontSize: '0.75rem', color: '#6b7280' }}>
-              <span style={{ color: '#f9fafb' }}>Cost</span> = top row &nbsp;|&nbsp; <span style={{ color: '#10b981' }}>Selling</span> = bottom row (cost + markup%)
-            </div>
-          </div>
-        )}
+      {/* ── Tab Navigation ── */}
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '0' }}>
+        {([['rates', `Rater (${tender.rates?.length || 0})`], ['simulator', 'Simulator'], ['copy', 'Kopier til system']] as const).map(([key, label]) => (
+          <button key={key} onClick={() => setTab(key)}
+            style={{
+              padding: '8px 16px', fontSize: '0.85rem', cursor: 'pointer', border: 'none', background: 'none',
+              color: tab === key ? '#f9fafb' : '#6b7280',
+              borderBottom: tab === key ? '2px solid #3b82f6' : '2px solid transparent',
+              fontFamily: 'inherit', fontWeight: tab === key ? 600 : 400,
+              marginBottom: '-1px', transition: 'all 0.15s ease',
+            }}>
+            {label}
+          </button>
+        ))}
       </div>
 
-      {/* Weight Simulator */}
-      <div className="glass-card" style={{ marginBottom: '24px' }}>
-        <h3 style={{ color: '#f9fafb', fontSize: '1.1rem', marginBottom: '16px' }}>Weight Simulator</h3>
-        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '16px' }}>
-          <div className="filter-group">
-            <label className="filter-label">Actual Weight (kg)</label>
-            <input type="number" className="text-input" value={actualWeight} onChange={e => setActualWeight(e.target.value)} placeholder="0" />
-          </div>
-          <div className="filter-group">
-            <label className="filter-label">Volume Weight (kg)</label>
-            <input type="number" className="text-input" value={volumeWeight} onChange={e => setVolumeWeight(e.target.value)} placeholder="0" />
-          </div>
-          {chargeableWeight > 0 && (
-            <div className="filter-group">
-              <label className="filter-label">Chargeable Weight</label>
-              <div style={{ color: '#f59e0b', fontSize: '1.2rem', fontWeight: 700, padding: '8px 0' }}>{chargeableWeight.toFixed(1)} kg</div>
+      {/* ══ TAB: RATES ══ */}
+      {tab === 'rates' && (
+        <div className="glass-card">
+          {(!tender.rates || tender.rates.length === 0) ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
+              <div style={{ fontSize: '2rem', marginBottom: '12px' }}>📭</div>
+              Ingen rater ennå. Importer en Excel-fil, eller legg til rater fra Dashboard.
+            </div>
+          ) : (
+            <div className="table-container" style={{ overflowX: 'auto' }}>
+              <table style={{ minWidth: '900px' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '32px' }}></th>
+                    <th>Carrier</th>
+                    <th>Produkt</th>
+                    <th>Lane</th>
+                    <th>Via</th>
+                    {BRACKETS.map(b => <th key={b.cost}>{b.label}</th>)}
+                    <th>Curr</th>
+                    <th>Gyldig til</th>
+                    <th>Notater</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tender.rates.map((rate: any) => {
+                    const iata = rate.airline?.split(',')[0]?.trim() || '';
+                    const expiry = getRateExpiryStatus(rate);
+                    return (
+                      <React.Fragment key={rate.id}>
+                        {/* Cost row */}
+                        <tr className="cost-row">
+                          <td rowSpan={2}>
+                            <input type="checkbox" checked={rate.is_selected}
+                              onChange={e => { updateRateField(rate.id, { is_selected: e.target.checked }); fetchTender(); }}
+                              title="Merk som valgt" style={{ cursor: 'pointer' }} />
+                          </td>
+                          <td rowSpan={2}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              {iata && <img src={`https://images.kiwi.com/airlines/64/${iata}.png`} alt={iata}
+                                width="18" height="18" style={{ borderRadius: '3px' }}
+                                onError={e => (e.currentTarget.style.display = 'none')} />}
+                              <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{rate.airline}</span>
+                            </div>
+                          </td>
+                          <td rowSpan={2} style={{ fontSize: '0.78rem' }}>{rate.product || '-'}</td>
+                          <td rowSpan={2} style={{ fontSize: '0.72rem', color: '#9ca3af' }}>
+                            {rate.origin}→{rate.destination}
+                            {rate.lane_id && <div style={{ color: '#4b5563', fontSize: '0.68rem' }}>#{rate.lane_id}</div>}
+                          </td>
+                          <td rowSpan={2} style={{ fontSize: '0.75rem' }}>{rate.via || rate.routing || '-'}</td>
+                          {BRACKETS.map(b => (
+                            <td key={b.cost} style={{ fontSize: '0.8rem', color: '#d1d5db' }}>
+                              {rate[b.cost] != null ? rate[b.cost].toFixed(2) : <span style={{ color: '#374151' }}>-</span>}
+                            </td>
+                          ))}
+                          <td rowSpan={2} style={{ fontSize: '0.75rem', color: '#6b7280' }}>{rate.currency || 'NOK'}</td>
+                          <td rowSpan={2}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                              <input type="date" className="text-input" style={{ fontSize: '0.7rem', padding: '3px 6px' }}
+                                defaultValue={toDateInputValue(rate.valid_until || tender.valid_until)}
+                                onBlur={e => updateRateField(rate.id, { valid_until: e.target.value || null })} />
+                              {expiry && <span style={{ fontSize: '0.68rem', color: expiry.color, fontWeight: 600 }}>{expiry.label}</span>}
+                            </div>
+                          </td>
+                          <td rowSpan={2}>
+                            <input type="text" className="text-input" style={{ width: '90px', fontSize: '0.72rem', padding: '3px 6px' }}
+                              defaultValue={rate.notes || ''} placeholder="Notat..."
+                              onBlur={e => updateRateField(rate.id, { notes: e.target.value })} />
+                          </td>
+                          <td rowSpan={2}>
+                            <button className="btn btn-danger" style={{ padding: '2px 7px', fontSize: '0.68rem' }}
+                              onClick={() => deleteRate(rate.id)}>✕</button>
+                          </td>
+                        </tr>
+                        {/* Selling row */}
+                        <tr className="sell-row">
+                          {BRACKETS.map(b => {
+                            const sell = getSelling(rate[b.cost], b.markup);
+                            return (
+                              <td key={b.cost + '_s'} style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 600 }}>
+                                {sell != null ? sell.toFixed(2) : <span style={{ color: '#374151' }}>-</span>}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div style={{ padding: '8px 16px', fontSize: '0.73rem', color: '#4b5563', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '16px' }}>
+                <span><span style={{ color: '#d1d5db' }}>■</span> Kostpris (øvre rad)</span>
+                <span><span style={{ color: '#10b981' }}>■</span> Salgspris = kostpris + markup% (nedre rad)</span>
+                <span>☑ Merk preferert rate</span>
+              </div>
             </div>
           )}
         </div>
+      )}
 
-        {simResults.length > 0 && (
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Airline</th>
-                  <th>Product</th>
-                  <th>Bracket</th>
-                  <th>Rate/kg (cost)</th>
-                  <th>Total Cost</th>
-                  <th>Rate/kg (sell)</th>
-                  <th>Total Selling</th>
-                  <th>Margin</th>
-                </tr>
-              </thead>
-              <tbody>
-                {simResults.map((r: any, i: number) => (
-                  <tr key={i}>
-                    <td style={{ fontSize: '0.85rem' }}>{r.airline}</td>
-                    <td style={{ fontSize: '0.85rem' }}>{r.product || '-'}</td>
-                    <td style={{ fontSize: '0.75rem', color: '#9ca3af' }}>{r.bracketLabel}</td>
-                    <td>{r.costRate?.toFixed(2)} {r.currency}</td>
-                    <td style={{ fontWeight: 600 }}>{r.totalCost?.toFixed(2)} {r.currency}</td>
-                    <td style={{ color: '#10b981' }}>{r.sellRate?.toFixed(2)} {r.currency}</td>
-                    <td style={{ color: '#10b981', fontWeight: 600 }}>{r.totalSell?.toFixed(2)} {r.currency}</td>
-                    <td style={{ color: '#f59e0b', fontWeight: 600 }}>{r.margin?.toFixed(2)} {r.currency}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Copy to System */}
-      {tender.rates && tender.rates.length > 0 && (
+      {/* ══ TAB: SIMULATOR ══ */}
+      {tab === 'simulator' && (
         <div className="glass-card">
-          <h3 style={{ color: '#f9fafb', fontSize: '1.1rem', marginBottom: '16px' }}>Copy to System</h3>
+          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '20px', alignItems: 'flex-end' }}>
+            <div className="filter-group">
+              <label className="filter-label">Actual weight (kg)</label>
+              <input type="number" className="text-input" value={actualWeight}
+                onChange={e => setActualWeight(e.target.value)} placeholder="0" style={{ width: '130px' }} />
+            </div>
+            <div className="filter-group">
+              <label className="filter-label">Volume weight (kg)</label>
+              <input type="number" className="text-input" value={volumeWeight}
+                onChange={e => setVolumeWeight(e.target.value)} placeholder="0" style={{ width: '130px' }} />
+            </div>
+            {chargeableWeight > 0 && (
+              <div style={{ padding: '8px 16px', background: 'rgba(245,158,11,0.1)', borderRadius: '8px', border: '1px solid #f59e0b44' }}>
+                <div style={{ color: '#9ca3af', fontSize: '0.75rem' }}>Chargeable weight</div>
+                <div style={{ color: '#f59e0b', fontSize: '1.4rem', fontWeight: 700 }}>{chargeableWeight.toFixed(1)} kg</div>
+              </div>
+            )}
+          </div>
 
-          <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', marginBottom: '16px', alignItems: 'center' }}>
+          {chargeableWeight > 0 && simResults.length === 0 && (
+            <div style={{ color: '#9ca3af', padding: '16px' }}>Ingen rater å simulere på.</div>
+          )}
+
+          {simResults.length > 0 && (
+            <div className="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Carrier</th>
+                    <th>Produkt</th>
+                    <th>Lane</th>
+                    <th>Bracket</th>
+                    <th>Rate/kg (kost)</th>
+                    <th>Total kost</th>
+                    <th>Rate/kg (salg)</th>
+                    <th>Total salg</th>
+                    <th>Margin</th>
+                    <th>Margin %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {simResults.map((r: any, i: number) => {
+                    const marginPct = r.totalSell && r.totalCost ? ((r.totalSell - r.totalCost) / r.totalSell) * 100 : null;
+                    const isFirst = i === 0;
+                    return (
+                      <tr key={i} style={{ background: isFirst ? 'rgba(16, 185, 129, 0.06)' : undefined }}>
+                        <td style={{ fontWeight: isFirst ? 700 : 400 }}>
+                          {isFirst && <span style={{ color: '#10b981', marginRight: '4px' }}>🏆</span>}
+                          {r.airline}
+                        </td>
+                        <td style={{ fontSize: '0.8rem' }}>{r.product || '-'}</td>
+                        <td style={{ fontSize: '0.75rem', color: '#9ca3af' }}>{r.origin}→{r.destination}</td>
+                        <td><span style={{ background: '#1e3a5f', color: '#93c5fd', padding: '2px 7px', borderRadius: '10px', fontSize: '0.75rem' }}>{r.bracketLabel}</span></td>
+                        <td>{r.costRate?.toFixed(2)} <span style={{ color: '#4b5563', fontSize: '0.75rem' }}>{r.currency}</span></td>
+                        <td style={{ fontWeight: 600 }}>{r.totalCost?.toFixed(0)} {r.currency}</td>
+                        <td style={{ color: '#10b981' }}>{r.sellRate?.toFixed(2)} <span style={{ color: '#4b5563', fontSize: '0.75rem' }}>{r.currency}</span></td>
+                        <td style={{ color: '#10b981', fontWeight: 600 }}>{r.totalSell?.toFixed(0)} {r.currency}</td>
+                        <td style={{ color: '#f59e0b', fontWeight: 600 }}>{r.margin?.toFixed(0)} {r.currency}</td>
+                        <td style={{ color: marginPct && marginPct > 15 ? '#10b981' : '#f59e0b', fontWeight: 600 }}>
+                          {marginPct?.toFixed(1)}%
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══ TAB: COPY ══ */}
+      {tab === 'copy' && (
+        <div className="glass-card">
+          <div style={{ display: 'flex', gap: '32px', flexWrap: 'wrap', marginBottom: '20px', alignItems: 'flex-start' }}>
             <div>
-              <label className="filter-label" style={{ marginBottom: '8px', display: 'block' }}>Include Brackets</label>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <label className="filter-label" style={{ display: 'block', marginBottom: '8px' }}>Inkluder vektklasser</label>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                 {BRACKETS.map(b => (
-                  <label key={b.cost} style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#9ca3af', fontSize: '0.8rem', cursor: 'pointer' }}>
+                  <label key={b.cost} style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#9ca3af', fontSize: '0.82rem', cursor: 'pointer' }}>
                     <input type="checkbox" checked={copyBrackets[b.cost]}
                       onChange={e => setCopyBrackets({ ...copyBrackets, [b.cost]: e.target.checked })} />
                     {b.label}
@@ -405,33 +556,81 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
               </div>
             </div>
             <div>
-              <label className="filter-label" style={{ marginBottom: '8px', display: 'block' }}>Copy Values</label>
+              <label className="filter-label" style={{ display: 'block', marginBottom: '8px' }}>Verdier</label>
               <div style={{ display: 'flex', gap: '12px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#9ca3af', fontSize: '0.85rem', cursor: 'pointer' }}>
-                  <input type="radio" name="copyMode" checked={copyMode === 'cost'} onChange={() => setCopyMode('cost')} /> Cost
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#10b981', fontSize: '0.85rem', cursor: 'pointer' }}>
-                  <input type="radio" name="copyMode" checked={copyMode === 'selling'} onChange={() => setCopyMode('selling')} /> Selling
-                </label>
+                {[['cost', 'Kostpris'], ['selling', 'Salgspris']].map(([val, lbl]) => (
+                  <label key={val} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontSize: '0.85rem', color: copyMode === val ? '#f9fafb' : '#6b7280' }}>
+                    <input type="radio" name="copyMode" checked={copyMode === val as any} onChange={() => setCopyMode(val as any)} />
+                    {lbl}
+                  </label>
+                ))}
               </div>
+            </div>
+            <div>
+              <label className="filter-label" style={{ display: 'block', marginBottom: '8px' }}>Med metadata</label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontSize: '0.85rem', color: '#9ca3af' }}>
+                <input type="checkbox" checked={copyWithMeta} onChange={e => setCopyWithMeta(e.target.checked)} />
+                Carrier, Origin, Dest, Via
+              </label>
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {tender.rates.map((rate: any) => (
-              <div key={rate.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 12px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px' }}>
-                <span style={{ flex: 1, fontSize: '0.85rem', color: '#d1d5db' }}>
-                  {rate.airline} — {rate.product || 'N/A'} ({rate.origin}→{rate.destination})
-                </span>
-                <button className="btn" style={{ fontSize: '0.75rem', padding: '4px 10px' }} onClick={() => copyRateToClipboard(rate, false)}>
-                  📋 Copy Rates
-                </button>
-                <button className="btn" style={{ fontSize: '0.75rem', padding: '4px 10px' }} onClick={() => copyRateToClipboard(rate, true)}>
-                  📋 Copy Full
+          <div style={{ fontSize: '0.75rem', color: '#4b5563', marginBottom: '16px' }}>
+            Tab-separerte verdier — lim direkte inn i Excel/systemet.
+          </div>
+
+          {(!tender.rates || tender.rates.length === 0) ? (
+            <div style={{ color: '#9ca3af' }}>Ingen rater å kopiere.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {tender.rates.map((rate: any) => (
+                <div key={rate.id} style={{
+                  display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px',
+                  background: rate.is_selected ? 'rgba(59,130,246,0.08)' : 'rgba(0,0,0,0.2)',
+                  borderRadius: '8px',
+                  border: rate.is_selected ? '1px solid #3b82f633' : '1px solid transparent'
+                }}>
+                  {rate.is_selected && <span style={{ color: '#3b82f6', fontSize: '0.75rem' }}>✓</span>}
+                  <div style={{ flex: 1, fontSize: '0.82rem', color: '#d1d5db' }}>
+                    <span style={{ fontWeight: 600 }}>{rate.airline}</span>
+                    <span style={{ color: '#6b7280' }}> — {rate.product || 'N/A'}</span>
+                    <span style={{ color: '#4b5563' }}> · {rate.origin}→{rate.destination}</span>
+                    {rate.lane_id && <span style={{ color: '#374151', fontSize: '0.72rem' }}> · #{rate.lane_id}</span>}
+                  </div>
+                  <button className="btn" style={{ fontSize: '0.75rem', padding: '4px 12px', whiteSpace: 'nowrap' }}
+                    onClick={() => copyRateToClipboard(rate)}>
+                    📋 Kopier
+                  </button>
+                </div>
+              ))}
+              <div style={{ marginTop: '8px' }}>
+                <button className="btn btn-primary" style={{ fontSize: '0.8rem' }}
+                  onClick={() => {
+                    const selected = tender.rates.filter((r: any) => r.is_selected);
+                    const toProcess = selected.length > 0 ? selected : tender.rates;
+                    const rows = toProcess.map((rate: any) => {
+                      const parts: string[] = [];
+                      if (copyWithMeta) {
+                        const iata = rate.airline?.split(',')[0]?.trim() || '';
+                        parts.push(iata, rate.origin || '', rate.destination || '', rate.via || '');
+                      }
+                      parts.push(rate.currency || 'NOK');
+                      BRACKETS.forEach(b => {
+                        if (!copyBrackets[b.cost]) return;
+                        const cost = rate[b.cost];
+                        const val = copyMode === 'selling' ? getSelling(cost, b.markup) : cost;
+                        parts.push(val != null ? val.toFixed(2) : '');
+                      });
+                      return parts.join('\t');
+                    });
+                    navigator.clipboard.writeText(rows.join('\n'));
+                    showToast(`✓ Kopiert ${toProcess.length} rater`);
+                  }}>
+                  📋 Kopier alle{tender.rates.filter((r: any) => r.is_selected).length > 0 ? ` valgte (${tender.rates.filter((r: any) => r.is_selected).length})` : ''}
                 </button>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
       )}
     </div>
