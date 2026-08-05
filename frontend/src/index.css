@@ -414,3 +414,198 @@ input[type="file"] {
   color: var(--text-muted);
   font-size: 0.875rem;
 }
+
+/* Tender Grid */
+.tender-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.tender-card {
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.tender-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-blue);
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid;
+}
+
+/* Text inputs */
+.text-input {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.2s ease;
+  width: 100%;
+}
+
+.text-input:focus {
+  border-color: var(--accent-blue);
+}
+
+/* Markup */
+.markup-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.markup-input {
+  width: 70px;
+  background-color: var(--bg-primary);
+  color: var(--accent-amber);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.markup-input:focus {
+  border-color: var(--accent-amber);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.2);
+}
+
+/* Number inputs */
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Notes */
+.notes-textarea {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 12px;
+  font-family: inherit;
+  font-size: 0.875rem;
+  outline: none;
+  resize: vertical;
+  width: 100%;
+  min-height: 60px;
+  transition: border-color 0.2s ease;
+}
+
+.notes-textarea:focus {
+  border-color: var(--accent-blue);
+}
+
+/* Cost / Selling rows */
+.cost-row td {
+  border-bottom: none !important;
+  padding-bottom: 2px;
+}
+
+.sell-row td {
+  padding-top: 2px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  background: var(--accent-green);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  z-index: 1000;
+  animation: toastIn 0.3s ease-out, toastOut 0.3s ease-in 1.7s;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* Add to Tender */
+.add-to-tender-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.add-to-tender-btn:hover {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.tender-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  min-width: 180px;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+.tender-dropdown-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  transition: background 0.15s ease;
+}
+
+.tender-dropdown-item:hover {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+/* Back button */
+.back-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.back-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+

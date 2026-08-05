@@ -2,6 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 
 const API_BASE = 'https://athletic-essence-production-5a0c.up.railway.app';
 
+interface TenderMini {
+  id: number;
+  name: string;
+}
+
 interface DashboardProps {
   defaultUploadId: number | null;
 }
@@ -23,6 +28,9 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
   const [uploads, setUploads] = useState<any[]>([]);
   const [comparison, setComparison] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [tendersList, setTendersList] = useState<TenderMini[]>([]);
+  const [openTenderDropdown, setOpenTenderDropdown] = useState<number | null>(null);
+  const [tenderToast, setTenderToast] = useState('');
 
   // Filters
   const [selectedRoute, setSelectedRoute] = useState<string>('');
@@ -41,7 +49,30 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
     fetch(`${API_BASE}/api/rates/routes`).then(r => r.json()).then(setRoutes).catch(console.error);
     fetch(`${API_BASE}/api/rates/airlines`).then(r => r.json()).then(setAirlines).catch(console.error);
     fetch(`${API_BASE}/api/uploads/`).then(r => r.json()).then(setUploads).catch(console.error);
+    fetch(`${API_BASE}/api/tenders/`).then(r => r.json()).then((data: any[]) => setTendersList(data.map(t => ({ id: t.id, name: t.name })))).catch(console.error);
   }, []);
+
+  const addToTender = async (tenderId: number, row: any) => {
+    const origin = selectedRoute ? selectedRoute.split('-')[0] : '';
+    const dest = selectedRoute ? selectedRoute.split('-')[1] : '';
+    try {
+      await fetch(`${API_BASE}/api/tenders/${tenderId}/rates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          airline: row.airline, product: row.product,
+          origin: origin || row.origin || '', destination: dest || row.destination || '',
+          via: row.via, currency: row.currency,
+          cost_min: row.min_rate, cost_normal: row.normal_rate,
+          cost_q45: row.q45, cost_q100: row.q100, cost_q300: row.q300,
+          cost_q500: row.q500, cost_q1000: row.q1000, cost_q3000: row.q3000
+        })
+      });
+      setTenderToast('Added to tender!');
+      setTimeout(() => setTenderToast(''), 2000);
+    } catch (e) { console.error(e); }
+    setOpenTenderDropdown(null);
+  };
 
   useEffect(() => {
     fetchDashboardData();
@@ -211,6 +242,7 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
             <table>
               <thead>
                 <tr>
+                  <th style={{width: '40px'}}></th>
                   <th onClick={() => handleSort('airline')} style={{cursor: 'pointer'}}>Airline {sortField === 'airline' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</th>
                   <th onClick={() => handleSort('product')} style={{cursor: 'pointer'}}>Product {sortField === 'product' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</th>
                   <th>Via</th>
@@ -228,6 +260,18 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
                   const iata = getIataCode(row.airline);
                   return (
                     <tr key={idx}>
+                      <td style={{position: 'relative'}}>
+                        <button className="add-to-tender-btn" title="Add to Tender" onClick={() => setOpenTenderDropdown(openTenderDropdown === idx ? null : idx)}>➕</button>
+                        {openTenderDropdown === idx && (
+                          <div className="tender-dropdown">
+                            {tendersList.length === 0 ? (
+                              <div style={{padding: '8px', color: '#9ca3af', fontSize: '0.8rem'}}>No tenders yet</div>
+                            ) : tendersList.map(t => (
+                              <div key={t.id} className="tender-dropdown-item" onClick={() => addToTender(t.id, row)}>{t.name}</div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
                       <td>
                         <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
                           {iata && <img src={`https://images.kiwi.com/airlines/64/${iata}.png`} alt={iata} width="24" height="24" style={{borderRadius: '4px'}} onError={(e) => (e.currentTarget.style.display = 'none')} />}
@@ -265,6 +309,7 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
 
   return (
     <div className="view-container">
+      {tenderToast && <div className="toast">{tenderToast}</div>}
       <div className="filter-bar">
         <div className="filter-group">
           <label className="filter-label">Route</label>

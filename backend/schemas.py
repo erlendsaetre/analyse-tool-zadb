@@ -75,3 +75,101 @@ class ComparisonItem(BaseModel):
     q1000: Optional[float] = None
     q3000: Optional[float] = None
     currency: Optional[str] = None
+
+
+# --- Tender Schemas ---
+
+class TenderCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+class TenderUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    notes: Optional[str] = None
+    markup_min: Optional[float] = None
+    markup_normal: Optional[float] = None
+    markup_q45: Optional[float] = None
+    markup_q100: Optional[float] = None
+    markup_q300: Optional[float] = None
+    markup_q500: Optional[float] = None
+    markup_q1000: Optional[float] = None
+    markup_q3000: Optional[float] = None
+
+class TenderRateCreate(BaseModel):
+    source_rate_id: Optional[int] = None
+    airline: str
+    product: Optional[str] = None
+    origin: Optional[str] = None
+    destination: Optional[str] = None
+    via: Optional[str] = None
+    currency: Optional[str] = None
+    cost_min: Optional[float] = None
+    cost_normal: Optional[float] = None
+    cost_q45: Optional[float] = None
+    cost_q100: Optional[float] = None
+    cost_q300: Optional[float] = None
+    cost_q500: Optional[float] = None
+    cost_q1000: Optional[float] = None
+    cost_q3000: Optional[float] = None
+    notes: Optional[str] = None
+
+class TenderRateUpdate(BaseModel):
+    notes: Optional[str] = None
+
+class TenderRateResponse(BaseModel):
+    id: int
+    tender_id: int
+    source_rate_id: Optional[int] = None
+    airline: str
+    product: Optional[str] = None
+    origin: Optional[str] = None
+    destination: Optional[str] = None
+    via: Optional[str] = None
+    currency: Optional[str] = None
+    cost_min: Optional[float] = None
+    cost_normal: Optional[float] = None
+    cost_q45: Optional[float] = None
+    cost_q100: Optional[float] = None
+    cost_q300: Optional[float] = None
+    cost_q500: Optional[float] = None
+    cost_q1000: Optional[float] = None
+    cost_q3000: Optional[float] = None
+    notes: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class TenderResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    status: str
+    notes: Optional[str] = None
+    markup_min: float
+    markup_normal: float
+    markup_q45: float
+    markup_q100: float
+    markup_q300: float
+    markup_q500: float
+    markup_q1000: float
+    markup_q3000: float
+    created_at: datetime
+    updated_at: datetime
+    rates: List[TenderRateResponse] = []
+
+    class Config:
+        from_attributes = True
+
+class TenderListItem(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    rate_count: int
+
+    class Config:
+        from_attributes = True
