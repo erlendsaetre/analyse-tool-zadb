@@ -11,7 +11,9 @@ export default function TenderList({ onOpenTender }: TenderListProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
+  const [importFile, setImportFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchTenders = async () => {
     try {
@@ -26,15 +28,42 @@ export default function TenderList({ onOpenTender }: TenderListProps) {
 
   const createTender = async () => {
     if (!newName.trim()) return;
+    setIsSubmitting(true);
     try {
-      await fetch(`${API_BASE}/api/tenders/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName, description: newDesc || null })
-      });
-      setNewName(''); setNewDesc(''); setShowCreate(false);
+      if (importFile) {
+        // Import TE Connect format
+        const formData = new FormData();
+        formData.append('file', importFile);
+        formData.append('tender_name', newName);
+        if (newDesc) formData.append('tender_description', newDesc);
+
+        const res = await fetch(`${API_BASE}/api/tenders/import-te-connect`, {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!res.ok) {
+            const error = await res.json();
+            alert(`Error: ${error.detail}`);
+            setIsSubmitting(false);
+            return;
+        }
+      } else {
+        // Create empty tender
+        await fetch(`${API_BASE}/api/tenders/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: newName, description: newDesc || null })
+        });
+      }
+      setNewName(''); setNewDesc(''); setImportFile(null); setShowCreate(false);
       fetchTenders();
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+        console.error(e); 
+        alert("Failed to create tender");
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   const deleteTender = async (id: number, e: React.MouseEvent) => {
@@ -63,16 +92,32 @@ export default function TenderList({ onOpenTender }: TenderListProps) {
 
       {showCreate && (
         <div className="glass-card" style={{ marginBottom: '24px' }}>
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <div className="filter-group">
-              <label className="filter-label">Name</label>
-              <input type="text" value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. Chicago Q3 2026" className="text-input" />
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-start', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
+                <div className="filter-group">
+                <label className="filter-label">Name</label>
+                <input type="text" value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. TE Connect Q4" className="text-input" />
+                </div>
+                <div className="filter-group" style={{ flex: 1 }}>
+                <label className="filter-label">Description</label>
+                <input type="text" value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Optional description..." className="text-input" />
+                </div>
             </div>
-            <div className="filter-group" style={{ flex: 1 }}>
-              <label className="filter-label">Description</label>
-              <input type="text" value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Optional description..." className="text-input" />
+            
+            <div className="filter-group" style={{ width: '100%', marginTop: '8px', padding: '16px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', border: '1px dashed var(--border-color)' }}>
+              <label className="filter-label">Import TE Connect Format (Optional)</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <input type="file" accept=".xls,.xlsx" onChange={e => setImportFile(e.target.files ? e.target.files[0] : null)} className="text-input" style={{ flex: 1, padding: '4px' }} />
+                  {importFile && <button className="btn" onClick={() => setImportFile(null)}>Clear</button>}
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#9ca3af', marginTop: '8px' }}>
+                  Upload a TE Connect Excel file (must contain a "Row_based" sheet). We will automatically extract all lanes and prepopulate the tender.
+              </div>
             </div>
-            <button className="btn btn-primary" onClick={createTender}>Create</button>
+
+            <button className="btn btn-primary" onClick={createTender} disabled={!newName.trim() || isSubmitting} style={{ alignSelf: 'flex-end', marginTop: '8px' }}>
+                {isSubmitting ? 'Creating...' : (importFile ? 'Import & Create Tender' : 'Create Empty Tender')}
+            </button>
           </div>
         </div>
       )}
