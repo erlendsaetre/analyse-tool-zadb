@@ -269,11 +269,22 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
                   const days = daysUntil(row.valid_until);
                   const expiryColor = days !== null ? (days < 0 ? '#f87171' : days <= 7 ? '#f59e0b' : '#10b981') : (row.valid_from ? '#10b981' : '#6b7280');
                   
-                  const formatDate = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
+                  const formatDate = (d: string) => new Date(d).toLocaleDateString('no-NO', { day: '2-digit', month: '2-digit', year: '2-digit' });
+                  
                   let validityText = '-';
-                  if (row.valid_from && row.valid_until) validityText = `${formatDate(row.valid_from)} - ${formatDate(row.valid_until)}`;
-                  else if (row.valid_from) validityText = `From ${formatDate(row.valid_from)}`;
-                  else if (row.valid_until) validityText = `Until ${formatDate(row.valid_until)}`;
+                  let daysBadge = '';
+                  
+                  if (days !== null) {
+                      daysBadge = days < 0 ? ' (Utløpt)' : ` (${days}d igjen)`;
+                  }
+
+                  if (row.valid_from && row.valid_until) {
+                      validityText = `${formatDate(row.valid_from)} - ${formatDate(row.valid_until)}${daysBadge}`;
+                  } else if (row.valid_from) {
+                      validityText = `Fra ${formatDate(row.valid_from)}`;
+                  } else if (row.valid_until) {
+                      validityText = `Til ${formatDate(row.valid_until)}${daysBadge}`;
+                  }
                   
                   return (
                     <tr key={idx}>
