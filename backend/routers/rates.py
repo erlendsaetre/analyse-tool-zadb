@@ -133,8 +133,11 @@ def get_comparison(
     return [
         schemas.ComparisonItem(
             airline=r.airline,
+            gsa=r.gsa,
             product=r.product,
             via=r.via,
+            valid_from=r.valid_from,
+            valid_until=r.valid_until,
             min_rate=r.min_rate,
             normal_rate=r.normal_rate,
             q45=r.q45,

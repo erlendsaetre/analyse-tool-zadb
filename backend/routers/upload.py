@@ -24,6 +24,8 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
             raise HTTPException(status_code=400, detail="Sheet 'ML-Rates' not found in the Excel file.")
 
         df.dropna(how='all', inplace=True)
+        # Strip whitespace from column names to ensure robust matching
+        df.columns = [str(c).strip() if pd.notna(c) else c for c in df.columns]
         
         # Create upload record
         upload_record = models.Upload(

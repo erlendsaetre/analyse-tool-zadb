@@ -260,15 +260,20 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
                   ))}
                   {!showBrackets && <th>Status</th>}
                   <th>Curr</th>
-                  <th>Expires</th>
+                  <th>Validity</th>
                 </tr>
               </thead>
               <tbody>
                 {sorted.map((row, idx) => {
                   const iata = getIataCode(row.airline);
                   const days = daysUntil(row.valid_until);
-                  const expiryColor = days !== null ? (days < 0 ? '#f87171' : days <= 7 ? '#f59e0b' : '#10b981') : '#6b7280';
-                  const expiryText = days !== null ? (days < 0 ? 'Expired' : `${days}d`) : '-';
+                  const expiryColor = days !== null ? (days < 0 ? '#f87171' : days <= 7 ? '#f59e0b' : '#10b981') : (row.valid_from ? '#10b981' : '#6b7280');
+                  
+                  const formatDate = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
+                  let validityText = '-';
+                  if (row.valid_from && row.valid_until) validityText = `${formatDate(row.valid_from)} - ${formatDate(row.valid_until)}`;
+                  else if (row.valid_from) validityText = `From ${formatDate(row.valid_from)}`;
+                  else if (row.valid_until) validityText = `Until ${formatDate(row.valid_until)}`;
                   
                   return (
                     <tr key={idx}>
@@ -302,8 +307,8 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
                       )}
                       <td>{row.currency || 'USD'}</td>
                       <td>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: expiryColor, padding: '2px 6px', background: `${expiryColor}22`, borderRadius: '8px' }}>
-                          {expiryText}
+                        <span style={{ fontSize: '0.7rem', fontWeight: 600, color: expiryColor, padding: '2px 6px', background: `${expiryColor}22`, borderRadius: '8px', whiteSpace: 'nowrap' }}>
+                          {validityText}
                         </span>
                       </td>
                     </tr>

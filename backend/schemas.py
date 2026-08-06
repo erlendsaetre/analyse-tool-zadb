@@ -72,6 +72,7 @@ class ComparisonItem(BaseModel):
     gsa: Optional[str] = None
     product: str
     via: Optional[str] = None
+    valid_from: Optional[datetime] = None
     valid_until: Optional[datetime] = None
     min_rate: Optional[float] = None
     normal_rate: Optional[float] = None
