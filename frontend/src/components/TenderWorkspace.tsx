@@ -41,6 +41,8 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importNotes, setImportNotes] = useState('');
   const [isImporting, setIsImporting] = useState(false);
+  const [preview, setPreview] = useState<any>(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Simulator
@@ -110,13 +112,30 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
     });
   };
 
+  const handlePreview = async () => {
+    if (!importFile) return;
+    setIsPreviewing(true);
+    setPreview(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', importFile);
+      const res = await fetch(`${API_BASE}/api/tenders/${tenderId}/import/preview`, { method: 'POST', body: fd });
+      if (!res.ok) {
+        const err = await res.json();
+        showToast(`Feil: ${err.detail}`);
+        return;
+      }
+      setPreview(await res.json());
+    } catch (e) { showToast('Kunne ikke lese fil'); }
+    finally { setIsPreviewing(false); }
+  };
+
   const handleImport = async () => {
     if (!importFile) return;
     setIsImporting(true);
     try {
       const fd = new FormData();
       fd.append('file', importFile);
-      fd.append('format_type', 'kn_row_based');
       if (importNotes) fd.append('import_notes', importNotes);
 
       const res = await fetch(`${API_BASE}/api/tenders/${tenderId}/import`, { method: 'POST', body: fd });
@@ -126,10 +145,11 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
         return;
       }
       const data = await res.json();
-      showToast(`✓ Importert ${data.lane_count} lanes`);
+      showToast(`✓ Importert ${data.lane_count} rater (${data.format_detected})`);
       setShowImport(false);
       setImportFile(null);
       setImportNotes('');
+      setPreview(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       fetchTender();
     } catch (e) { showToast('Importfeil'); }
@@ -285,28 +305,119 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
       {/* ── Import Panel ── */}
       {showImport && (
         <div className="glass-card" style={{ marginBottom: '20px', border: '1px dashed #3b82f666' }}>
-          <h3 style={{ color: '#f9fafb', fontSize: '1rem', marginBottom: '12px' }}>📂 Import Excel-fil</h3>
+          <h3 style={{ color: '#f9fafb', fontSize: '1rem', marginBottom: '12px' }}>📂 Smart Import</h3>
           <div style={{ color: '#9ca3af', fontSize: '0.8rem', marginBottom: '12px' }}>
-            Støtter KN standard eksportformat (må inneholde et "Row_based" ark med headers på rad 12).
-            Innholdet legges til denne tenderen uten å slette eksisterende rater.
+            Last opp en Excel-fil. Systemet auto-detekterer formatet, leser alle kolonner, og viser deg hva den fant før du importerer.
           </div>
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+
+          {/* Step 1: File selection */}
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '16px' }}>
             <div className="filter-group" style={{ flex: 3 }}>
-              <label className="filter-label">Velg fil (.xlsx / .xls)</label>
+              <label className="filter-label">1. Velg fil (.xlsx / .xls)</label>
               <input ref={fileInputRef} type="file" accept=".xls,.xlsx" className="text-input"
                 style={{ padding: '6px' }}
-                onChange={e => setImportFile(e.target.files?.[0] || null)} />
+                onChange={e => { setImportFile(e.target.files?.[0] || null); setPreview(null); }} />
             </div>
-            <div className="filter-group" style={{ flex: 2 }}>
-              <label className="filter-label">Notat (valgfritt)</label>
-              <input type="text" className="text-input" value={importNotes} onChange={e => setImportNotes(e.target.value)}
-                placeholder="F.eks. Første innhenting, Rev.2..." />
-            </div>
-            <button className="btn btn-primary" onClick={handleImport}
-              disabled={!importFile || isImporting} style={{ whiteSpace: 'nowrap' }}>
-              {isImporting ? 'Importerer...' : `Import${importFile ? ` "${importFile.name}"` : ''}`}
+            <button className="btn" onClick={handlePreview}
+              disabled={!importFile || isPreviewing} style={{ whiteSpace: 'nowrap' }}>
+              {isPreviewing ? '🔍 Leser...' : '🔍 Forhåndsvis'}
             </button>
           </div>
+
+          {/* Step 2: Preview results */}
+          {preview && (
+            <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                <div style={{ background: '#10b98122', padding: '6px 12px', borderRadius: '8px', fontSize: '0.8rem' }}>
+                  <span style={{ color: '#9ca3af' }}>Format: </span>
+                  <span style={{ color: '#10b981', fontWeight: 600 }}>{preview.format_detected}</span>
+                </div>
+                <div style={{ background: '#3b82f622', padding: '6px 12px', borderRadius: '8px', fontSize: '0.8rem' }}>
+                  <span style={{ color: '#9ca3af' }}>Ark: </span>
+                  <span style={{ color: '#3b82f6', fontWeight: 600 }}>{preview.sheet_used}</span>
+                </div>
+                <div style={{ background: '#f59e0b22', padding: '6px 12px', borderRadius: '8px', fontSize: '0.8rem' }}>
+                  <span style={{ color: '#9ca3af' }}>Retning: </span>
+                  <span style={{ color: '#f59e0b', fontWeight: 600 }}>{preview.direction === 'export' ? '📤 Eksport fra Norge' : preview.direction === 'import' ? '📥 Import til Norge' : '❓ Ukjent'}</span>
+                </div>
+                <div style={{ background: '#8b5cf622', padding: '6px 12px', borderRadius: '8px', fontSize: '0.8rem' }}>
+                  <span style={{ color: '#9ca3af' }}>Rater funnet: </span>
+                  <span style={{ color: '#8b5cf6', fontWeight: 700, fontSize: '1rem' }}>{preview.total_rates}</span>
+                </div>
+              </div>
+
+              {/* Mapped columns */}
+              <div style={{ marginBottom: '12px' }}>
+                <div style={{ color: '#9ca3af', fontSize: '0.75rem', marginBottom: '6px' }}>✅ Gjenkjente kolonner ({Object.keys(preview.columns_mapped).length}):</div>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {Object.entries(preview.columns_mapped).map(([field, col]: any) => (
+                    <span key={field} style={{ background: '#10b98115', border: '1px solid #10b98133', color: '#a7f3d0', padding: '2px 8px', borderRadius: '6px', fontSize: '0.72rem' }}>
+                      {col}: {field}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Unmapped columns */}
+              {preview.columns_unmapped.length > 0 && (
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{ color: '#9ca3af', fontSize: '0.75rem', marginBottom: '6px' }}>⚠️ Ikke-gjenkjente kolonner ({preview.columns_unmapped.length}):</div>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {preview.columns_unmapped.map((col: string, i: number) => (
+                      <span key={i} style={{ background: '#f59e0b15', border: '1px solid #f59e0b33', color: '#fcd34d', padding: '2px 8px', borderRadius: '6px', fontSize: '0.72rem' }}>
+                        {col}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Sample rows */}
+              {preview.sample_rows.length > 0 && (
+                <div>
+                  <div style={{ color: '#9ca3af', fontSize: '0.75rem', marginBottom: '6px' }}>Eksempel (første {preview.sample_rows.length} rader):</div>
+                  <div className="table-container" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                    <table style={{ fontSize: '0.75rem' }}>
+                      <thead>
+                        <tr>
+                          <th>Airline</th><th>Product</th><th>Origin</th><th>Dest</th><th>Via</th>
+                          <th>Min</th><th>Normal</th><th>+45</th><th>+100</th><th>+300</th><th>+500</th><th>+1000</th>
+                          <th>Curr</th><th>Valid</th><th>Expires</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {preview.sample_rows.map((r: any, i: number) => (
+                          <tr key={i}>
+                            <td>{r.airline || '-'}</td><td>{r.product || '-'}</td>
+                            <td>{r.origin || '-'}</td><td>{r.destination || '-'}</td><td>{r.via || '-'}</td>
+                            <td>{r.cost_min ?? '-'}</td><td>{r.cost_normal ?? '-'}</td>
+                            <td>{r.cost_q45 ?? '-'}</td><td>{r.cost_q100 ?? '-'}</td>
+                            <td>{r.cost_q300 ?? '-'}</td><td>{r.cost_q500 ?? '-'}</td><td>{r.cost_q1000 ?? '-'}</td>
+                            <td>{r.currency || '-'}</td>
+                            <td style={{ fontSize: '0.7rem' }}>{r.valid_from ? new Date(r.valid_from).toLocaleDateString('no-NO') : '-'}</td>
+                            <td style={{ fontSize: '0.7rem' }}>{r.valid_until ? new Date(r.valid_until).toLocaleDateString('no-NO') : '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 3: Confirm import */}
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+                <div className="filter-group" style={{ flex: 2 }}>
+                  <label className="filter-label">2. Notat (valgfritt)</label>
+                  <input type="text" className="text-input" value={importNotes} onChange={e => setImportNotes(e.target.value)}
+                    placeholder="F.eks. Rev.2, Oppdaterte rater..." />
+                </div>
+                <button className="btn btn-primary" onClick={handleImport}
+                  disabled={isImporting || preview.total_rates === 0} style={{ whiteSpace: 'nowrap' }}>
+                  {isImporting ? 'Importerer...' : `✅ Importer ${preview.total_rates} rater`}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Import history */}
           {tender.imports && tender.imports.length > 0 && (
@@ -316,7 +427,7 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
                 <div key={imp.id} style={{ display: 'flex', gap: '12px', alignItems: 'center', fontSize: '0.8rem', color: '#6b7280', padding: '4px 0' }}>
                   <span>📄 {imp.filename}</span>
                   <span>·</span>
-                  <span>{imp.lane_count} lanes</span>
+                  <span>{imp.lane_count} rater</span>
                   <span>·</span>
                   <span>{new Date(imp.imported_at).toLocaleDateString('no', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
                   {imp.notes && <span style={{ color: '#4b5563' }}>· {imp.notes}</span>}

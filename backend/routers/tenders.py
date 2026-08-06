@@ -2,12 +2,7 @@
 Tenders Router
 ==============
 Handles all CRUD for Tenders, TenderRates, and file imports.
-
-Import formats supported:
-  - kn_row_based: KN TE Connect / standard KN tender export (Row_based sheet, headers row 12, data from row 14)
-
-Future import formats can be added by extending _parse_kn_row_based() or adding new parser functions
-and wiring them in the import endpoint via the format_type parameter.
+Uses smart_parser for auto-detecting and parsing any Excel file format.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
@@ -15,7 +10,6 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from database import get_db
 import models, schemas
-import openpyxl
 import io
 from datetime import datetime
 
@@ -136,24 +130,63 @@ def delete_tender_rate(tender_id: int, rate_id: int, db: Session = Depends(get_d
 
 
 # ══════════════════════════════════════════════════════════════
-#  File Import — into existing tender
+#  File Import — Preview (dry-run) + Commit
 # ══════════════════════════════════════════════════════════════
+
+@router.post("/{tender_id}/import/preview")
+async def preview_import(
+    tender_id: int,
+    file: UploadFile = File(...),
+):
+    """
+    Preview what the smart parser would extract from an Excel file.
+    Returns detected format, column mapping, direction, and first 5 sample rows.
+    Does NOT save anything to the database.
+    """
+    if not file.filename.endswith(('.xls', '.xlsx')):
+        raise HTTPException(status_code=400, detail="Only Excel files (.xls, .xlsx) are supported.")
+
+    try:
+        from smart_parser import smart_parse
+        contents = await file.read()
+        rates, metadata = smart_parse(contents)
+
+        # Return first 5 rows as sample
+        sample = []
+        for r in rates[:5]:
+            row = {k: v for k, v in r.items()}
+            # Convert dates to strings for JSON
+            if row.get('valid_from'):
+                row['valid_from'] = row['valid_from'].isoformat()
+            if row.get('valid_until'):
+                row['valid_until'] = row['valid_until'].isoformat()
+            sample.append(row)
+
+        return {
+            "filename": file.filename,
+            "format_detected": metadata['format_detected'],
+            "sheet_used": metadata['sheet_used'],
+            "direction": metadata['direction'],
+            "total_rates": metadata['total_rows'],
+            "columns_mapped": metadata['columns_mapped'],
+            "columns_unmapped": metadata['columns_unmapped'],
+            "sample_rows": sample,
+            "notes": metadata['notes']
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error parsing file: {str(e)}")
+
 
 @router.post("/{tender_id}/import")
 async def import_file_into_tender(
     tender_id: int,
     file: UploadFile = File(...),
-    format_type: str = Form("kn_row_based"),
     import_notes: str = Form(None),
     db: Session = Depends(get_db)
 ):
     """
-    Import an Excel file into an EXISTING tender.
-    
-    Supported format_type values:
-      - kn_row_based (default): KN TE Connect / standard KN tender export
-    
-    Returns a summary of what was imported.
+    Import an Excel file into an existing tender using smart auto-detection.
+    Automatically detects the file format and extracts all rate information.
     """
     tender = db.query(models.Tender).filter(models.Tender.id == tender_id).first()
     if not tender:
@@ -163,21 +196,21 @@ async def import_file_into_tender(
         raise HTTPException(status_code=400, detail="Only Excel files (.xls, .xlsx) are supported.")
 
     try:
+        from smart_parser import smart_parse
         contents = await file.read()
+        rates_data, metadata = smart_parse(contents)
 
-        if format_type == "kn_row_based":
-            rates_data, parse_notes = _parse_kn_row_based(contents)
-        else:
-            raise HTTPException(status_code=400, detail=f"Unknown format_type: {format_type}")
+        if not rates_data:
+            raise HTTPException(status_code=400, detail=f"No rates found in file. {metadata['notes']}")
 
         # Record this import
         import_record = models.TenderImport(
             tender_id=tender_id,
             filename=file.filename,
-            format_type=format_type,
+            format_type=metadata['format_detected'],
             imported_at=datetime.utcnow(),
             lane_count=len(rates_data),
-            notes=import_notes or parse_notes
+            notes=import_notes or metadata['notes']
         )
         db.add(import_record)
         db.flush()
@@ -187,19 +220,41 @@ async def import_file_into_tender(
             db_rate = models.TenderRate(
                 tender_id=tender_id,
                 tender_import_id=import_record.id,
-                **rd
+                lane_id=rd.get('lane_id'),
+                airline=rd.get('airline', 'Unknown'),
+                product=rd.get('product'),
+                origin=rd.get('origin'),
+                destination=rd.get('destination'),
+                via=rd.get('via'),
+                routing=rd.get('routing'),
+                currency=rd.get('currency', 'NOK'),
+                terms=rd.get('terms'),
+                cost_min=rd.get('cost_min'),
+                cost_normal=rd.get('cost_normal'),
+                cost_q45=rd.get('cost_q45'),
+                cost_q100=rd.get('cost_q100'),
+                cost_q300=rd.get('cost_q300'),
+                cost_q500=rd.get('cost_q500'),
+                cost_q1000=rd.get('cost_q1000'),
+                cost_q3000=rd.get('cost_q3000'),
+                valid_from=rd.get('valid_from'),
+                valid_until=rd.get('valid_until'),
+                notes=rd.get('notes'),
             )
             db.add(db_rate)
 
         db.commit()
 
         return {
-            "message": f"Imported {len(rates_data)} lanes from '{file.filename}'",
+            "message": f"Imported {len(rates_data)} rates from '{file.filename}'",
             "tender_id": tender_id,
             "import_id": import_record.id,
             "lane_count": len(rates_data),
-            "format": format_type,
-            "parse_notes": parse_notes
+            "format_detected": metadata['format_detected'],
+            "direction": metadata['direction'],
+            "columns_mapped": metadata['columns_mapped'],
+            "columns_unmapped": metadata['columns_unmapped'],
+            "notes": metadata['notes']
         }
 
     except HTTPException:
@@ -207,131 +262,3 @@ async def import_file_into_tender(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error parsing file: {str(e)}")
-
-
-# ══════════════════════════════════════════════════════════════
-#  Parser: KN Row_based format
-# ══════════════════════════════════════════════════════════════
-
-def _col_letter_to_index(col: str) -> int:
-    """Convert Excel column letter(s) to 1-based column index."""
-    result = 0
-    for ch in col.upper():
-        result = result * 26 + (ord(ch) - ord('A') + 1)
-    return result
-
-
-# Column definitions for the KN "Row_based" sheet format.
-# Key: our field name, Value: Excel column letter (headers on row 12, data from row 14)
-# To adapt for a new export format, create a new COL_MAP and parser function.
-KN_ROW_BASED_COLS = {
-    'lane_id':       'H',   # KN Lane ID
-    'origin_city':   'S',   # Origin City (for notes)
-    'origin':        'X',   # KN Assigned Origin Airport
-    'dest_city':     'AJ',  # Destination City (for notes)
-    'destination':   'AO',  # KN Assigned Destination Airport
-    'service_level': 'BM',  # KN Service Level
-    'product':       'BN',  # KN Product
-    'terms':         'BO',  # Terms of Delivery
-    'currency':      'DE',  # Main Carriage Currency
-    'cost_min':      'DM',  # Main Carriage MIN
-    'cost_normal':   'DN',  # Main Carriage +0KG
-    'cost_q45':      'DO',  # Main Carriage +45KG
-    'cost_q100':     'DP',  # Main Carriage +100KG
-    'cost_q300':     'DQ',  # Main Carriage +300KG
-    'cost_q500':     'DR',  # Main Carriage +500KG
-    'cost_q1000':    'DS',  # Main Carriage +1000KG
-    'cost_q3000':    'DT',  # Main Carriage +3000KG
-    'airline':       'EB',  # Carrier (IATA codes, may be comma-separated)
-    'routing':       'EC',  # Routing e.g. OSL-DOH-BKK
-    'via':           'ED',  # Transit Airport
-}
-
-
-def _parse_kn_row_based(contents: bytes):
-    """
-    Parse a KN TE Connect / Row_based format Excel file.
-    Returns (list_of_rate_dicts, parse_notes_string).
-    """
-    wb = openpyxl.load_workbook(io.BytesIO(contents), data_only=True)
-
-    # Find the sheet
-    sheet_name = None
-    for name in wb.sheetnames:
-        if 'row_based' in name.lower():
-            sheet_name = name
-            break
-    if not sheet_name:
-        sheet_name = wb.sheetnames[0]
-
-    ws = wb[sheet_name]
-
-    # Convert column letters to indices once
-    col_idx = {field: _col_letter_to_index(col) for field, col in KN_ROW_BASED_COLS.items()}
-
-    def cell(row, field):
-        return ws.cell(row=row, column=col_idx[field]).value
-
-    def sf(val):
-        if val is None: return None
-        try: return float(val)
-        except: return None
-
-    def ss(val):
-        if val is None: return ""
-        return str(val).strip()
-
-    rates = []
-    skipped = 0
-
-    # Data rows start at row 14
-    for row_idx in range(14, ws.max_row + 1):
-        lane_id = cell(row_idx, 'lane_id')
-        if not lane_id:
-            skipped += 1
-            continue
-
-        airline = ss(cell(row_idx, 'airline'))
-        origin = ss(cell(row_idx, 'origin'))
-        destination = ss(cell(row_idx, 'destination'))
-        routing = ss(cell(row_idx, 'routing'))
-        via = ss(cell(row_idx, 'via'))
-        product = ss(cell(row_idx, 'product'))
-        service_level = ss(cell(row_idx, 'service_level'))
-        terms = ss(cell(row_idx, 'terms'))
-        currency = ss(cell(row_idx, 'currency')) or 'NOK'
-        origin_city = ss(cell(row_idx, 'origin_city'))
-        dest_city = ss(cell(row_idx, 'dest_city'))
-
-        product_label = product
-        if service_level and service_level != product:
-            product_label = f"{product} ({service_level})"
-
-        notes_parts = [f"Lane {lane_id}"]
-        if origin_city: notes_parts.append(f"From: {origin_city}")
-        if dest_city: notes_parts.append(f"To: {dest_city}")
-        if routing: notes_parts.append(f"Route: {routing}")
-
-        rates.append({
-            'lane_id': str(lane_id),
-            'airline': airline or 'Unknown',
-            'product': product_label,
-            'origin': origin,
-            'destination': destination,
-            'via': via or None,
-            'routing': routing or None,
-            'currency': currency,
-            'terms': terms or None,
-            'cost_min': sf(cell(row_idx, 'cost_min')),
-            'cost_normal': sf(cell(row_idx, 'cost_normal')),
-            'cost_q45': sf(cell(row_idx, 'cost_q45')),
-            'cost_q100': sf(cell(row_idx, 'cost_q100')),
-            'cost_q300': sf(cell(row_idx, 'cost_q300')),
-            'cost_q500': sf(cell(row_idx, 'cost_q500')),
-            'cost_q1000': sf(cell(row_idx, 'cost_q1000')),
-            'cost_q3000': sf(cell(row_idx, 'cost_q3000')),
-            'notes': ' | '.join(notes_parts),
-        })
-
-    parse_notes = f"Sheet: '{sheet_name}'. Imported {len(rates)} lanes, skipped {skipped} empty rows."
-    return rates, parse_notes
