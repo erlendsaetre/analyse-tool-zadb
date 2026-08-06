@@ -378,48 +378,13 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
               <table className="excel-table">
                 <thead>
                   <tr>
-                    <th rowSpan={2} className="sticky-col" style={{ left: 0, width: '40px' }}></th>
-                    <th rowSpan={2} className="sticky-col" style={{ left: '40px' }}>No.</th>
-                    <th rowSpan={2} className="sticky-col" style={{ left: '80px', minWidth: '120px' }}>Carrier</th>
-                    
-                    <th colSpan={3} className="group-header group-pricing">Pricing Info</th>
-                    <th colSpan={6} className="group-header group-origin">Origin Info</th>
-                    <th colSpan={6} className="group-header group-dest">Destination Info</th>
-                    <th colSpan={5} className="group-header group-req">Lane requirements</th>
-                    <th colSpan={17} className="group-header group-rates">Rates (Buy & Sell)</th>
-                  </tr>
-                  <tr>
-                    <th className="group-pricing">O/A</th>
-                    <th className="group-pricing">KN Lane ID</th>
-                    <th className="group-pricing">Included</th>
-                    
-                    <th className="group-origin">Country</th>
-                    <th className="group-origin">State</th>
-                    <th className="group-origin">City</th>
-                    <th className="group-origin">ZIP</th>
-                    <th className="group-origin">Airport</th>
-                    <th className="group-origin">Gateway</th>
-                    
-                    <th className="group-dest">Country</th>
-                    <th className="group-dest">State</th>
-                    <th className="group-dest">City</th>
-                    <th className="group-dest">ZIP</th>
-                    <th className="group-dest">Airport</th>
-                    <th className="group-dest">Gateway</th>
-                    
-                    <th className="group-req">Commodity</th>
-                    <th className="group-req">DG Y/N</th>
-                    <th className="group-req">Terms</th>
-                    <th className="group-req">DIM Factor</th>
-                    <th className="group-req">Transit Time</th>
-                    
-                    <th className="group-rates">Curr</th>
-                    {BRACKETS.map(b => (
-                      <React.Fragment key={b.cost}>
-                        <th className="group-rates">{b.label} (Kjøp)</th>
-                        <th className="group-rates col-sell">{b.label} (Salg)</th>
-                      </React.Fragment>
-                    ))}
+                    <th className="sticky-col" style={{ left: 0, width: '40px' }}></th>
+                    <th className="sticky-col" style={{ left: '40px' }}>No.</th>
+                    <th className="sticky-col" style={{ left: '80px', minWidth: '120px' }}>Carrier</th>
+                    <th>Origin (IATA)</th>
+                    <th>Destinasjon (IATA)</th>
+                    <th>Origin ZIP</th>
+                    <th>Pickup Zone</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -445,60 +410,17 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
                           </div>
                         </td>
                         
-                        {/* Pricing Info */}
-                        <td>{meta['Original or Additional Lane [O/A]'] || meta['O'] || 'O'}</td>
-                        <td style={{ fontWeight: 600 }}>{meta['KN Lane ID'] || rate.lane_id || '-'}</td>
-                        <td>{meta['Lane Included\n[Y/N]'] || 'Y'}</td>
-                        
-                        {/* Origin Info */}
-                        <td>
-                          {rate.origin_country || meta['Origin Country Code\n2 Letter Code'] || '-'}
-                        </td>
-                        <td>{meta['Origin State'] || '-'}</td>
-                        <td>{rate.origin_city || meta['Origin City'] || '-'}</td>
-                        <td>{rate.origin_zip || meta['Origin City ZIP Code'] || '-'}</td>
                         <td>{rate.origin || meta['Origin Former Region Code\n2 Letter Code'] || '-'}</td>
-                        <td>{rate.origin_gateway || meta['KN Assigned Origin Gateway\n3 Letter Code'] || '-'}</td>
-                        
-                        {/* Dest Info */}
-                        <td>
-                          {rate.destination_country || meta['Destination Country Code\n2 Letter Code'] || '-'}
-                        </td>
-                        <td>{meta['Destination State'] || '-'}</td>
-                        <td>{rate.destination_city || meta['Destination City'] || '-'}</td>
-                        <td>{rate.destination_zip || meta['Destination City ZIP Code'] || '-'}</td>
                         <td>{rate.destination || meta['Destination Former Region Code\n2 Letter Code'] || '-'}</td>
-                        <td>{rate.destination_gateway || meta['KN Assigned Destination Gateway\n3 Letter Code'] || '-'}</td>
-                        
-                        {/* Lane Req */}
-                        <td>{rate.product || meta['Category'] || '-'}</td>
-                        <td>{meta['Dangerous\nGoods\nY/N'] || 'N'}</td>
-                        <td>{rate.terms || meta['Terms of\nDelivery\nDTD / DDA /\nATA / ATD'] || '-'}</td>
-                        <td>{meta['DIM Factor'] || '-'}</td>
-                        <td>{meta['Transit Time ATD [HOUR]'] || '-'}</td>
-                        
-                        {/* Rates */}
-                        <td style={{ fontWeight: 600, color: '#9ca3af' }}>{rate.currency || 'NOK'}</td>
-                        {BRACKETS.map(b => {
-                          const sell = getSelling(rate[b.cost], b.markup);
-                          return (
-                            <React.Fragment key={b.cost}>
-                              <td className="col-buy">{rate[b.cost] != null ? rate[b.cost].toFixed(2) : '-'}</td>
-                              <td className="col-sell">{sell != null ? sell.toFixed(2) : '-'}</td>
-                            </React.Fragment>
-                          );
-                        })}
-                        
-                          );
-                        })}
+                        <td>{rate.origin_zip || meta['Origin City ZIP Code'] || '-'}</td>
+                        <td>{meta['Pick Up Zone [A / B / C / D / etc.]'] || '-'}</td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
               <div style={{ padding: '8px 16px', fontSize: '0.73rem', color: '#4b5563', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '16px' }}>
-                <span>☑ Merk prefererte rater</span>
-                <span>💡 Salgspris inkluderer valgt markup% per vektklasse. Scroll til høyre for å se all lane-informasjon!</span>
+                <span>☑ Merk prefererte lanes</span>
               </div>
             </div>
           )}
