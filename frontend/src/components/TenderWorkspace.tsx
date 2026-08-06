@@ -311,15 +311,54 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
           </div>
 
           {/* Step 1: File selection */}
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '16px' }}>
-            <div className="filter-group" style={{ flex: 3 }}>
-              <label className="filter-label">1. Velg fil (.xlsx / .xls)</label>
-              <input ref={fileInputRef} type="file" accept=".xls,.xlsx" className="text-input"
-                style={{ padding: '6px' }}
-                onChange={e => { setImportFile(e.target.files?.[0] || null); setPreview(null); }} />
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'stretch', marginBottom: '16px' }}>
+            <div 
+              style={{ 
+                flex: 3, 
+                border: '2px dashed #4b5563', 
+                borderRadius: '8px', 
+                padding: '20px', 
+                textAlign: 'center',
+                position: 'relative',
+                background: 'rgba(0,0,0,0.2)',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'center',
+                transition: 'all 0.2s'
+              }}
+              onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'; }}
+              onDragLeave={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#4b5563'; e.currentTarget.style.background = 'rgba(0,0,0,0.2)'; }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.currentTarget.style.borderColor = '#4b5563';
+                e.currentTarget.style.background = 'rgba(0,0,0,0.2)';
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                  setImportFile(e.dataTransfer.files[0]);
+                  setPreview(null);
+                  if (fileInputRef.current) fileInputRef.current.files = e.dataTransfer.files;
+                }
+              }}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input 
+                ref={fileInputRef} 
+                type="file" 
+                accept=".xls,.xlsx" 
+                style={{ display: 'none' }}
+                onChange={e => { setImportFile(e.target.files?.[0] || null); setPreview(null); }} 
+              />
+              <div style={{ fontSize: '1.2rem', marginBottom: '8px' }}>{importFile ? '📄' : '📁'}</div>
+              <div style={{ color: importFile ? '#10b981' : '#f9fafb', fontWeight: 600, marginBottom: '4px' }}>
+                {importFile ? importFile.name : 'Klikk for å velge fil, eller dra filen hit'}
+              </div>
+              <div style={{ color: '#9ca3af', fontSize: '0.75rem' }}>Kun .xlsx og .xls filer (maks 10MB)</div>
             </div>
+            
             <button className="btn" onClick={handlePreview}
-              disabled={!importFile || isPreviewing} style={{ whiteSpace: 'nowrap' }}>
+              disabled={!importFile || isPreviewing} 
+              style={{ whiteSpace: 'nowrap', alignSelf: 'center', height: 'fit-content' }}>
               {isPreviewing ? '🔍 Leser...' : '🔍 Forhåndsvis'}
             </button>
           </div>
