@@ -524,118 +524,147 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
               Ingen rater ennå. Importer en Excel-fil, eller legg til rater fra Dashboard.
             </div>
           ) : (
-            <div className="table-container" style={{ overflowX: 'auto' }}>
-              <table style={{ minWidth: '900px' }}>
+            <div className="table-container excel-table-container">
+              <table className="excel-table">
                 <thead>
                   <tr>
-                    <th style={{ width: '32px' }}></th>
-                    <th>Carrier</th>
-                    <th>Produkt</th>
-                    <th>Lane</th>
-                    <th>Via</th>
-                    {BRACKETS.map(b => <th key={b.cost}>{b.label}</th>)}
-                    <th>Curr</th>
-                    <th>Gyldig til</th>
-                    <th>Notater</th>
-                    <th></th>
+                    <th rowSpan={2} className="sticky-col" style={{ left: 0, width: '40px' }}></th>
+                    <th rowSpan={2} className="sticky-col" style={{ left: '40px' }}>No.</th>
+                    <th rowSpan={2} className="sticky-col" style={{ left: '80px', minWidth: '120px' }}>Carrier</th>
+                    
+                    <th colSpan={3} className="group-header group-pricing">Pricing Info</th>
+                    <th colSpan={6} className="group-header group-origin">Origin Info</th>
+                    <th colSpan={6} className="group-header group-dest">Destination Info</th>
+                    <th colSpan={5} className="group-header group-req">Lane requirements</th>
+                    <th colSpan={17} className="group-header group-rates">Rates (Buy & Sell)</th>
+                    <th colSpan={2} className="group-header group-extra">Extra</th>
+                  </tr>
+                  <tr>
+                    <th className="group-pricing">O/A</th>
+                    <th className="group-pricing">KN Lane ID</th>
+                    <th className="group-pricing">Included</th>
+                    
+                    <th className="group-origin">Country</th>
+                    <th className="group-origin">State</th>
+                    <th className="group-origin">City</th>
+                    <th className="group-origin">ZIP</th>
+                    <th className="group-origin">Airport</th>
+                    <th className="group-origin">Gateway</th>
+                    
+                    <th className="group-dest">Country</th>
+                    <th className="group-dest">State</th>
+                    <th className="group-dest">City</th>
+                    <th className="group-dest">ZIP</th>
+                    <th className="group-dest">Airport</th>
+                    <th className="group-dest">Gateway</th>
+                    
+                    <th className="group-req">Commodity</th>
+                    <th className="group-req">DG Y/N</th>
+                    <th className="group-req">Terms</th>
+                    <th className="group-req">DIM Factor</th>
+                    <th className="group-req">Transit Time</th>
+                    
+                    <th className="group-rates">Curr</th>
+                    {BRACKETS.map(b => (
+                      <React.Fragment key={b.cost}>
+                        <th className="group-rates">{b.label} (Kjøp)</th>
+                        <th className="group-rates col-sell">{b.label} (Salg)</th>
+                      </React.Fragment>
+                    ))}
+                    
+                    <th className="group-extra">Gyldig til</th>
+                    <th className="group-extra">Alle Metadata Felter</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {tender.rates.map((rate: any) => {
+                  {tender.rates.map((rate: any, index: number) => {
                     const iata = rate.airline?.split(',')[0]?.trim() || '';
                     const expiry = getRateExpiryStatus(rate);
+                    const meta = rate.extra_data ? JSON.parse(rate.extra_data) : {};
+                    
                     return (
-                      <React.Fragment key={rate.id}>
-                        {/* Cost row */}
-                        <tr className="cost-row">
-                          <td rowSpan={2}>
-                            <input type="checkbox" checked={rate.is_selected}
-                              onChange={e => { updateRateField(rate.id, { is_selected: e.target.checked }); fetchTender(); }}
-                              title="Merk som valgt" style={{ cursor: 'pointer' }} />
-                          </td>
-                          <td rowSpan={2}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              {iata && <img src={`https://images.kiwi.com/airlines/64/${iata}.png`} alt={iata}
-                                width="18" height="18" style={{ borderRadius: '3px' }}
-                                onError={e => (e.currentTarget.style.display = 'none')} />}
-                              <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{rate.airline}</span>
-                            </div>
-                          </td>
-                          <td rowSpan={2} style={{ fontSize: '0.78rem' }}>{rate.product || '-'}</td>
-                          <td rowSpan={2} style={{ fontSize: '0.72rem', color: '#9ca3af' }}>
-                            <div style={{ cursor: rate.extra_data ? 'pointer' : 'default' }} onClick={() => rate.extra_data && setExpandedRow(expandedRow === rate.id ? null : rate.id)}>
-                              {rate.origin}→{rate.destination}
-                              {rate.origin_city && <div style={{ color: '#6b7280', fontSize: '0.68rem' }}>{rate.origin_city}{rate.origin_zip ? ` (${rate.origin_zip})` : ''}</div>}
-                              {rate.destination_city && <div style={{ color: '#6b7280', fontSize: '0.68rem' }}>→ {rate.destination_city}{rate.destination_zip ? ` (${rate.destination_zip})` : ''}</div>}
-                              {rate.lane_id && <div style={{ color: '#4b5563', fontSize: '0.68rem' }}>#{rate.lane_id}</div>}
-                              {rate.extra_data && <span style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{expandedRow === rate.id ? '▼ Skjul detaljer' : '▶ Vis detaljer'}</span>}
-                            </div>
-                          </td>
-                          <td rowSpan={2} style={{ fontSize: '0.75rem' }}>{rate.via || rate.routing || '-'}</td>
-                          {BRACKETS.map(b => (
-                            <td key={b.cost} style={{ fontSize: '0.8rem', color: '#d1d5db' }}>
-                              {rate[b.cost] != null ? rate[b.cost].toFixed(2) : <span style={{ color: '#374151' }}>-</span>}
-                            </td>
-                          ))}
-                          <td rowSpan={2} style={{ fontSize: '0.75rem', color: '#6b7280' }}>{rate.currency || 'NOK'}</td>
-                          <td rowSpan={2}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                              <input type="date" className="text-input" style={{ fontSize: '0.7rem', padding: '3px 6px' }}
-                                defaultValue={toDateInputValue(rate.valid_until || tender.valid_until)}
-                                onBlur={e => updateRateField(rate.id, { valid_until: e.target.value || null })} />
-                              {expiry && <span style={{ fontSize: '0.68rem', color: expiry.color, fontWeight: 600 }}>{expiry.label}</span>}
-                            </div>
-                          </td>
-                          <td rowSpan={2}>
-                            <input type="text" className="text-input" style={{ width: '90px', fontSize: '0.72rem', padding: '3px 6px' }}
-                              defaultValue={rate.notes || ''} placeholder="Notat..."
-                              onBlur={e => updateRateField(rate.id, { notes: e.target.value })} />
-                          </td>
-                          <td rowSpan={2}>
-                            <button className="btn btn-danger" style={{ padding: '2px 7px', fontSize: '0.68rem' }}
-                              onClick={() => deleteRate(rate.id)}>✕</button>
-                          </td>
-                        </tr>
-                        {/* Selling row */}
-                        <tr className="sell-row">
-                          {BRACKETS.map(b => {
-                            const sell = getSelling(rate[b.cost], b.markup);
-                            return (
-                              <td key={b.cost + '_s'} style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 600 }}>
-                                {sell != null ? sell.toFixed(2) : <span style={{ color: '#374151' }}>-</span>}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                        {/* Metadata expansion row */}
-                        {expandedRow === rate.id && rate.extra_data && (() => {
-                          const meta = JSON.parse(rate.extra_data);
-                          const entries = Object.entries(meta);
-                          if (!entries.length) return null;
+                      <tr key={rate.id}>
+                        <td className="sticky-col" style={{ left: 0, width: '40px' }}>
+                          <input type="checkbox" checked={rate.is_selected}
+                            onChange={e => { updateRateField(rate.id, { is_selected: e.target.checked }); fetchTender(); }}
+                            title="Merk som valgt" style={{ cursor: 'pointer' }} />
+                        </td>
+                        <td className="sticky-col" style={{ left: '40px', color: '#9ca3af' }}>{index + 1}</td>
+                        <td className="sticky-col" style={{ left: '80px', minWidth: '120px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {iata && <img src={`https://images.kiwi.com/airlines/64/${iata}.png`} alt={iata}
+                              width="18" height="18" style={{ borderRadius: '3px' }}
+                              onError={e => (e.currentTarget.style.display = 'none')} />}
+                            <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{rate.airline || '-'}</span>
+                          </div>
+                        </td>
+                        
+                        {/* Pricing Info */}
+                        <td>{meta['Original or Additional Lane [O/A]'] || meta['O'] || 'O'}</td>
+                        <td style={{ fontWeight: 600 }}>{meta['KN Lane ID'] || rate.lane_id || '-'}</td>
+                        <td>{meta['Lane Included\n[Y/N]'] || 'Y'}</td>
+                        
+                        {/* Origin Info */}
+                        <td>
+                          {rate.origin_country || meta['Origin Country Code\n2 Letter Code'] || '-'}
+                        </td>
+                        <td>{meta['Origin State'] || '-'}</td>
+                        <td>{rate.origin_city || meta['Origin City'] || '-'}</td>
+                        <td>{rate.origin_zip || meta['Origin City ZIP Code'] || '-'}</td>
+                        <td>{rate.origin || meta['Origin Former Region Code\n2 Letter Code'] || '-'}</td>
+                        <td>{rate.origin_gateway || meta['KN Assigned Origin Gateway\n3 Letter Code'] || '-'}</td>
+                        
+                        {/* Dest Info */}
+                        <td>
+                          {rate.destination_country || meta['Destination Country Code\n2 Letter Code'] || '-'}
+                        </td>
+                        <td>{meta['Destination State'] || '-'}</td>
+                        <td>{rate.destination_city || meta['Destination City'] || '-'}</td>
+                        <td>{rate.destination_zip || meta['Destination City ZIP Code'] || '-'}</td>
+                        <td>{rate.destination || meta['Destination Former Region Code\n2 Letter Code'] || '-'}</td>
+                        <td>{rate.destination_gateway || meta['KN Assigned Destination Gateway\n3 Letter Code'] || '-'}</td>
+                        
+                        {/* Lane Req */}
+                        <td>{rate.product || meta['Category'] || '-'}</td>
+                        <td>{meta['Dangerous\nGoods\nY/N'] || 'N'}</td>
+                        <td>{rate.terms || meta['Terms of\nDelivery\nDTD / DDA /\nATA / ATD'] || '-'}</td>
+                        <td>{meta['DIM Factor'] || '-'}</td>
+                        <td>{meta['Transit Time ATD [HOUR]'] || '-'}</td>
+                        
+                        {/* Rates */}
+                        <td style={{ fontWeight: 600, color: '#9ca3af' }}>{rate.currency || 'NOK'}</td>
+                        {BRACKETS.map(b => {
+                          const sell = getSelling(rate[b.cost], b.markup);
                           return (
-                            <tr>
-                              <td colSpan={20} style={{ background: 'rgba(0,0,0,0.25)', padding: '10px 16px' }}>
-                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                  {entries.map(([k, v]: [string, any]) => (
-                                    <span key={k} style={{ background: '#1e293b', padding: '3px 8px', borderRadius: '6px', fontSize: '0.7rem' }}>
-                                      <span style={{ color: '#9ca3af' }}>{k}: </span>
-                                      <span style={{ color: '#e2e8f0' }}>{v}</span>
-                                    </span>
-                                  ))}
-                                </div>
-                              </td>
-                            </tr>
+                            <React.Fragment key={b.cost}>
+                              <td className="col-buy">{rate[b.cost] != null ? rate[b.cost].toFixed(2) : '-'}</td>
+                              <td className="col-sell">{sell != null ? sell.toFixed(2) : '-'}</td>
+                            </React.Fragment>
                           );
-                        })()}
-                      </React.Fragment>
+                        })}
+                        
+                        {/* Extra */}
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <input type="date" className="text-input" style={{ fontSize: '0.7rem', padding: '3px 6px', background: 'transparent', border: 'none' }}
+                              defaultValue={toDateInputValue(rate.valid_until || tender.valid_until)}
+                              onBlur={e => updateRateField(rate.id, { valid_until: e.target.value || null })} />
+                            {expiry && <span style={{ fontSize: '0.68rem', color: expiry.color, fontWeight: 600 }}>{expiry.label}</span>}
+                          </div>
+                        </td>
+                        <td style={{ maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                           <span title={JSON.stringify(meta, null, 2)} style={{ cursor: 'help', color: '#3b82f6', textDecoration: 'underline' }}>
+                             {Object.keys(meta).length} felter lagret...
+                           </span>
+                        </td>
+                      </tr>
                     );
                   })}
                 </tbody>
               </table>
               <div style={{ padding: '8px 16px', fontSize: '0.73rem', color: '#4b5563', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '16px' }}>
-                <span><span style={{ color: '#d1d5db' }}>■</span> Kostpris (øvre rad)</span>
-                <span><span style={{ color: '#10b981' }}>■</span> Salgspris = kostpris + markup% (nedre rad)</span>
-                <span>☑ Merk preferert rate</span>
+                <span>☑ Merk prefererte rater</span>
+                <span>💡 Salgspris inkluderer valgt markup% per vektklasse. Scroll til høyre for å se all lane-informasjon!</span>
               </div>
             </div>
           )}
