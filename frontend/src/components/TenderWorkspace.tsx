@@ -59,6 +59,8 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
 
   // Active tab
   const [tab, setTab] = useState<'rates' | 'simulator' | 'copy'>('rates');
+  // Expanded row (metadata viewer)
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
   const fetchTender = async () => {
     try {
@@ -561,8 +563,13 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
                           </td>
                           <td rowSpan={2} style={{ fontSize: '0.78rem' }}>{rate.product || '-'}</td>
                           <td rowSpan={2} style={{ fontSize: '0.72rem', color: '#9ca3af' }}>
-                            {rate.origin}→{rate.destination}
-                            {rate.lane_id && <div style={{ color: '#4b5563', fontSize: '0.68rem' }}>#{rate.lane_id}</div>}
+                            <div style={{ cursor: rate.metadata ? 'pointer' : 'default' }} onClick={() => rate.metadata && setExpandedRow(expandedRow === rate.id ? null : rate.id)}>
+                              {rate.origin}→{rate.destination}
+                              {rate.origin_city && <div style={{ color: '#6b7280', fontSize: '0.68rem' }}>{rate.origin_city}{rate.origin_zip ? ` (${rate.origin_zip})` : ''}</div>}
+                              {rate.destination_city && <div style={{ color: '#6b7280', fontSize: '0.68rem' }}>→ {rate.destination_city}{rate.destination_zip ? ` (${rate.destination_zip})` : ''}</div>}
+                              {rate.lane_id && <div style={{ color: '#4b5563', fontSize: '0.68rem' }}>#{rate.lane_id}</div>}
+                              {rate.metadata && <span style={{ color: '#3b82f6', fontSize: '0.65rem' }}>{expandedRow === rate.id ? '▼ Skjul detaljer' : '▶ Vis detaljer'}</span>}
+                            </div>
                           </td>
                           <td rowSpan={2} style={{ fontSize: '0.75rem' }}>{rate.via || rate.routing || '-'}</td>
                           {BRACKETS.map(b => (
@@ -600,6 +607,26 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
                             );
                           })}
                         </tr>
+                        {/* Metadata expansion row */}
+                        {expandedRow === rate.id && rate.metadata && (() => {
+                          const meta = JSON.parse(rate.metadata);
+                          const entries = Object.entries(meta);
+                          if (!entries.length) return null;
+                          return (
+                            <tr>
+                              <td colSpan={20} style={{ background: 'rgba(0,0,0,0.25)', padding: '10px 16px' }}>
+                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                  {entries.map(([k, v]: [string, any]) => (
+                                    <span key={k} style={{ background: '#1e293b', padding: '3px 8px', borderRadius: '6px', fontSize: '0.7rem' }}>
+                                      <span style={{ color: '#9ca3af' }}>{k}: </span>
+                                      <span style={{ color: '#e2e8f0' }}>{v}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })()}
                       </React.Fragment>
                     );
                   })}

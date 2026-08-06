@@ -106,6 +106,10 @@ class TenderRate(Base):
     A single lane/carrier rate within a tender.
     Stores cost (buy) rates as a snapshot. Selling price is computed via tender markup.
     Supports per-rate validity dates so rates can have different expiry windows.
+    
+    The `metadata` JSON column stores ALL extra fields from the imported file,
+    including zip codes, zones, DG info, commodity, dim factors, etc.
+    This ensures nothing is ever lost regardless of file format.
     """
     __tablename__ = "tender_rates"
     
@@ -115,7 +119,7 @@ class TenderRate(Base):
     source_rate_id = Column(Integer, nullable=True)   # reference to AirFreightRate if added from dashboard
     lane_id = Column(String, nullable=True)           # KN Lane ID from TE Connect / KN system
     
-    airline = Column(String, nullable=False)
+    airline = Column(String, nullable=True)
     product = Column(String, nullable=True)
     origin = Column(String, nullable=True)
     destination = Column(String, nullable=True)
@@ -123,6 +127,18 @@ class TenderRate(Base):
     routing = Column(String, nullable=True)           # Full routing string e.g. OSL-DOH-BKK
     currency = Column(String, nullable=True)
     terms = Column(String, nullable=True)             # DTD, DTA, ATA, ATD
+    
+    # Origin details
+    origin_city = Column(String, nullable=True)
+    origin_country = Column(String, nullable=True)
+    origin_zip = Column(String, nullable=True)
+    origin_gateway = Column(String, nullable=True)
+    
+    # Destination details
+    destination_city = Column(String, nullable=True)
+    destination_country = Column(String, nullable=True)
+    destination_zip = Column(String, nullable=True)
+    destination_gateway = Column(String, nullable=True)
     
     # Cost (buy) rates — main carriage
     cost_min = Column(Float, nullable=True)
@@ -143,4 +159,8 @@ class TenderRate(Base):
     is_selected = Column(Boolean, default=False)      # Mark preferred/selected rates
     sort_order = Column(Integer, default=0)           # Manual ordering
     
+    # All extra fields from import stored as JSON — nothing is ever lost
+    metadata = Column(Text, nullable=True)            # JSON string with all unmapped columns
+    
     tender = relationship("Tender", back_populates="rates")
+

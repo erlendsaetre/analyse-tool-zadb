@@ -227,8 +227,16 @@ async def import_file_into_tender(
                 destination=rd.get('destination'),
                 via=rd.get('via'),
                 routing=rd.get('routing'),
-                currency=rd.get('currency', 'NOK'),
+                currency=rd.get('currency') or 'NOK',
                 terms=rd.get('terms'),
+                origin_city=rd.get('origin_city'),
+                origin_country=rd.get('origin_country'),
+                origin_zip=rd.get('origin_zip'),
+                origin_gateway=rd.get('origin_gateway'),
+                destination_city=rd.get('destination_city'),
+                destination_country=rd.get('destination_country'),
+                destination_zip=rd.get('destination_zip'),
+                destination_gateway=rd.get('destination_gateway'),
                 cost_min=rd.get('cost_min'),
                 cost_normal=rd.get('cost_normal'),
                 cost_q45=rd.get('cost_q45'),
@@ -240,6 +248,7 @@ async def import_file_into_tender(
                 valid_from=rd.get('valid_from'),
                 valid_until=rd.get('valid_until'),
                 notes=rd.get('notes'),
+                metadata=rd.get('metadata'),
             )
             db.add(db_rate)
 

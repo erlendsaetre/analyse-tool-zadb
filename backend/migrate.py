@@ -62,6 +62,17 @@ def run_migrations():
             ("valid_until",      "TIMESTAMP"),
             ("is_selected",      "BOOLEAN DEFAULT FALSE"),
             ("sort_order",       "INTEGER DEFAULT 0"),
+            # Location details
+            ("origin_city",      "VARCHAR"),
+            ("origin_country",   "VARCHAR"),
+            ("origin_zip",       "VARCHAR"),
+            ("origin_gateway",   "VARCHAR"),
+            ("destination_city", "VARCHAR"),
+            ("destination_country", "VARCHAR"),
+            ("destination_zip",  "VARCHAR"),
+            ("destination_gateway", "VARCHAR"),
+            # All extra data as JSON
+            ("metadata",         "TEXT"),
         ]
         for col, col_type in rate_cols:
             try:

@@ -102,7 +102,7 @@ class TenderImportResponse(BaseModel):
 class TenderRateCreate(BaseModel):
     source_rate_id: Optional[int] = None
     lane_id: Optional[str] = None
-    airline: str
+    airline: Optional[str] = None
     product: Optional[str] = None
     origin: Optional[str] = None
     destination: Optional[str] = None
@@ -110,6 +110,14 @@ class TenderRateCreate(BaseModel):
     routing: Optional[str] = None
     currency: Optional[str] = None
     terms: Optional[str] = None
+    origin_city: Optional[str] = None
+    origin_country: Optional[str] = None
+    origin_zip: Optional[str] = None
+    origin_gateway: Optional[str] = None
+    destination_city: Optional[str] = None
+    destination_country: Optional[str] = None
+    destination_zip: Optional[str] = None
+    destination_gateway: Optional[str] = None
     cost_min: Optional[float] = None
     cost_normal: Optional[float] = None
     cost_q45: Optional[float] = None
@@ -122,6 +130,7 @@ class TenderRateCreate(BaseModel):
     valid_until: Optional[datetime] = None
     notes: Optional[str] = None
     is_selected: Optional[bool] = False
+    metadata: Optional[str] = None
 
 class TenderRateUpdate(BaseModel):
     notes: Optional[str] = None
@@ -136,7 +145,7 @@ class TenderRateResponse(BaseModel):
     tender_import_id: Optional[int] = None
     source_rate_id: Optional[int] = None
     lane_id: Optional[str] = None
-    airline: str
+    airline: Optional[str] = None
     product: Optional[str] = None
     origin: Optional[str] = None
     destination: Optional[str] = None
@@ -144,6 +153,14 @@ class TenderRateResponse(BaseModel):
     routing: Optional[str] = None
     currency: Optional[str] = None
     terms: Optional[str] = None
+    origin_city: Optional[str] = None
+    origin_country: Optional[str] = None
+    origin_zip: Optional[str] = None
+    origin_gateway: Optional[str] = None
+    destination_city: Optional[str] = None
+    destination_country: Optional[str] = None
+    destination_zip: Optional[str] = None
+    destination_gateway: Optional[str] = None
     cost_min: Optional[float] = None
     cost_normal: Optional[float] = None
     cost_q45: Optional[float] = None
@@ -157,6 +174,7 @@ class TenderRateResponse(BaseModel):
     notes: Optional[str] = None
     is_selected: bool = False
     sort_order: int = 0
+    metadata: Optional[str] = None
     class Config:
         from_attributes = True
 
