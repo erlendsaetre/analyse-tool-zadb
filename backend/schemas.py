@@ -130,7 +130,7 @@ class TenderRateCreate(BaseModel):
     valid_until: Optional[datetime] = None
     notes: Optional[str] = None
     is_selected: Optional[bool] = False
-    metadata: Optional[str] = None
+    extra_data: Optional[str] = None
 
 class TenderRateUpdate(BaseModel):
     notes: Optional[str] = None
@@ -174,7 +174,7 @@ class TenderRateResponse(BaseModel):
     notes: Optional[str] = None
     is_selected: bool = False
     sort_order: int = 0
-    metadata: Optional[str] = None
+    extra_data: Optional[str] = None
     class Config:
         from_attributes = True
 

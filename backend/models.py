@@ -160,7 +160,7 @@ class TenderRate(Base):
     sort_order = Column(Integer, default=0)           # Manual ordering
     
     # All extra fields from import stored as JSON — nothing is ever lost
-    metadata = Column(Text, nullable=True)            # JSON string with all unmapped columns
+    extra_data = Column(Text, nullable=True)            # JSON string with all unmapped columns
     
     tender = relationship("Tender", back_populates="rates")
 

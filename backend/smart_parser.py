@@ -363,19 +363,19 @@ def smart_parse(contents: bytes):
             'valid_from': row_data.get('valid_from'),
             'valid_until': row_data.get('valid_until'),
             'notes': None,
-            'metadata': json.dumps(extra, ensure_ascii=False) if extra else None,
+            'extra_data': json.dumps(extra, ensure_ascii=False) if extra else None,
         }
         
-        # Also include direction and any other mapped-but-not-DB fields in metadata
+        # Also include direction and any other mapped-but-not-DB fields in extra_data
         mapped_extra = {}
         for field in ('direction', 'fuel', 'security_surcharge', 'fixed', 'relation_kg_m3', 'gsa'):
             val = row_data.get(field)
             if val:
                 mapped_extra[field] = str(val) if not isinstance(val, str) else val
         if mapped_extra:
-            existing = json.loads(rate['metadata']) if rate['metadata'] else {}
+            existing = json.loads(rate['extra_data']) if rate['extra_data'] else {}
             existing.update(mapped_extra)
-            rate['metadata'] = json.dumps(existing, ensure_ascii=False)
+            rate['extra_data'] = json.dumps(existing, ensure_ascii=False)
         
         rates.append(rate)
     

@@ -248,7 +248,7 @@ async def import_file_into_tender(
                 valid_from=rd.get('valid_from'),
                 valid_until=rd.get('valid_until'),
                 notes=rd.get('notes'),
-                metadata=rd.get('metadata'),
+                extra_data=rd.get('extra_data'),
             )
             db.add(db_rate)
 

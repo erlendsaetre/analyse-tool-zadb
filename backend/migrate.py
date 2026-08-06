@@ -72,7 +72,7 @@ def run_migrations():
             ("destination_zip",  "VARCHAR"),
             ("destination_gateway", "VARCHAR"),
             # All extra data as JSON
-            ("metadata",         "TEXT"),
+            ("extra_data",       "TEXT"),
         ]
         for col, col_type in rate_cols:
             try:
