@@ -81,6 +81,12 @@ def run_migrations():
                 ))
             except Exception:
                 pass
+                
+        # Drop NOT NULL constraint on airline (since TE Connect files might not have an airline initially)
+        try:
+            conn.execute(text("ALTER TABLE tender_rates ALTER COLUMN airline DROP NOT NULL"))
+        except Exception:
+            pass
 
         conn.commit()
         print("✅ Migrations complete")
