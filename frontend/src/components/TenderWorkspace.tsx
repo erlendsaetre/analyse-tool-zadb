@@ -309,7 +309,7 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
         <div className="glass-card" style={{ marginBottom: '20px', border: '1px dashed #3b82f666' }}>
           <h3 style={{ color: '#f9fafb', fontSize: '1rem', marginBottom: '12px' }}>📂 Smart Import</h3>
           <div style={{ color: '#9ca3af', fontSize: '0.8rem', marginBottom: '12px' }}>
-            Last opp en Excel-fil. Systemet auto-detekterer formatet, leser alle kolonner, og viser deg hva den fant før du importerer.
+            Last opp en rate-fil (f.eks. fra flyselskap). Systemet auto-detekterer formatet, leser alle kolonner, og knytter ratene til dine lanes før du importerer.
           </div>
 
           {/* Step 1: File selection */}
