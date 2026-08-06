@@ -65,7 +65,8 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
           via: row.via, currency: row.currency,
           cost_min: row.min_rate, cost_normal: row.normal_rate,
           cost_q45: row.q45, cost_q100: row.q100, cost_q300: row.q300,
-          cost_q500: row.q500, cost_q1000: row.q1000, cost_q3000: row.q3000
+          cost_q500: row.q500, cost_q1000: row.q1000, cost_q3000: row.q3000,
+          valid_from: row.valid_from, valid_until: row.valid_until
         })
       });
       setTenderToast('Added to tender!');
@@ -211,6 +212,11 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
     return '';
   };
 
+  const daysUntil = (d: string | null | undefined): number | null => {
+    if (!d) return null;
+    return Math.ceil((new Date(d).getTime() - Date.now()) / 86400000);
+  };
+
   const renderComparisonTable = () => {
     if (!filteredData.length) return <div style={{padding: '20px', color: '#9ca3af'}}>No data available for the selected filters.</div>;
 
@@ -244,6 +250,7 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
                 <tr>
                   <th style={{width: '40px'}}></th>
                   <th onClick={() => handleSort('airline')} style={{cursor: 'pointer'}}>Airline {sortField === 'airline' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</th>
+                  <th>GSA</th>
                   <th onClick={() => handleSort('product')} style={{cursor: 'pointer'}}>Product {sortField === 'product' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</th>
                   <th>Via</th>
                   {showBrackets && WEIGHT_BRACKETS.map(b => (
@@ -253,11 +260,16 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
                   ))}
                   {!showBrackets && <th>Status</th>}
                   <th>Curr</th>
+                  <th>Expires</th>
                 </tr>
               </thead>
               <tbody>
                 {sorted.map((row, idx) => {
                   const iata = getIataCode(row.airline);
+                  const days = daysUntil(row.valid_until);
+                  const expiryColor = days !== null ? (days < 0 ? '#f87171' : days <= 7 ? '#f59e0b' : '#10b981') : '#6b7280';
+                  const expiryText = days !== null ? (days < 0 ? 'Expired' : `${days}d`) : '-';
+                  
                   return (
                     <tr key={idx}>
                       <td style={{position: 'relative'}}>
@@ -278,6 +290,7 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
                           {row.airline}
                         </div>
                       </td>
+                      <td>{row.gsa || '-'}</td>
                       <td>{row.product || '-'}</td>
                       <td>{row.via || '-'}</td>
                       {showBrackets ? brackets.map(b => (
@@ -288,6 +301,11 @@ export default function Dashboard({ defaultUploadId }: DashboardProps) {
                         <td style={{color: '#f87171'}}>Check Ad-Hoc / On Request</td>
                       )}
                       <td>{row.currency || 'USD'}</td>
+                      <td>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: expiryColor, padding: '2px 6px', background: `${expiryColor}22`, borderRadius: '8px' }}>
+                          {expiryText}
+                        </span>
+                      </td>
                     </tr>
                   )
                 })}

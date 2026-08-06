@@ -25,10 +25,13 @@ class UploadCreateResponse(BaseModel):
 
 class AirFreightRateBase(BaseModel):
     airline: str
+    gsa: Optional[str] = None
     product: str
     origin: str
     destination: str
     via: Optional[str] = None
+    valid_from: Optional[datetime] = None
+    valid_until: Optional[datetime] = None
     relation_kg_m3: Optional[float] = None
     fuel: Optional[str] = None
     security_surcharge: Optional[str] = None
@@ -66,8 +69,10 @@ class AnalyticsSummary(BaseModel):
 
 class ComparisonItem(BaseModel):
     airline: str
+    gsa: Optional[str] = None
     product: str
     via: Optional[str] = None
+    valid_until: Optional[datetime] = None
     min_rate: Optional[float] = None
     normal_rate: Optional[float] = None
     q45: Optional[float] = None

@@ -25,6 +25,20 @@ def run_migrations():
             except Exception:
                 pass  # column may already exist in some DB dialects
 
+        # ── air_freight_rates table: add new columns ───────────────────────
+        afr_cols = [
+            ("gsa",         "VARCHAR"),
+            ("valid_from",  "TIMESTAMP"),
+            ("valid_until", "TIMESTAMP"),
+        ]
+        for col, col_type in afr_cols:
+            try:
+                conn.execute(text(
+                    f"ALTER TABLE air_freight_rates ADD COLUMN IF NOT EXISTS {col} {col_type}"
+                ))
+            except Exception:
+                pass
+
         # ── tender_imports table: create if not exists ───────────────────────
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS tender_imports (

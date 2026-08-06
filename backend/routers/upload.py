@@ -37,43 +37,73 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
         saved_count = 0
         
         for index, row in df.iterrows():
-            airline = str(row.iloc[0])
-            if pd.isna(row.iloc[0]) or airline == 'nan':
-                continue
-                
-            def safe_float(val):
-                if pd.isna(val) or val == 'No' or val == 'nan' or str(val).strip() == '':
+            # Support both old and new formats by using .get() with fallback
+            # Old format had Airline at index 0, but pandas reads it as header if not careful,
+            # so we use column names for robustness.
+            airline_val = row.get('Airline')
+            
+            # If 'Airline' column not found, fallback to old positional logic if needed,
+            # but pandas reads the first row as columns anyway. Let's assume standard headers.
+            if pd.isna(airline_val) or str(airline_val) == 'nan' or not airline_val:
+                # try fallback to first column
+                airline_val = row.iloc[0] if len(row) > 0 else None
+                if pd.isna(airline_val) or str(airline_val) == 'nan' or not airline_val:
+                    continue
+            
+            def safe_float(col_name, fallback_idx=None):
+                val = row.get(col_name)
+                if val is None and fallback_idx is not None and fallback_idx < len(row):
+                    val = row.iloc[fallback_idx]
+                if pd.isna(val) or val == 'No' or str(val).strip().lower() in ('nan', ''):
                     return None
                 try:
                     return float(val)
-                except ValueError:
+                except (ValueError, TypeError):
                     return None
                     
-            def safe_str(val):
-                if pd.isna(val) or val == 'nan':
+            def safe_str(col_name, fallback_idx=None):
+                val = row.get(col_name)
+                if val is None and fallback_idx is not None and fallback_idx < len(row):
+                    val = row.iloc[fallback_idx]
+                if pd.isna(val) or str(val).strip().lower() in ('nan', ''):
                     return ""
                 return str(val).strip()
+
+            def safe_date(col_name):
+                val = row.get(col_name)
+                if pd.isna(val) or str(val).strip() in ('-', 'nan', ''):
+                    return None
+                if isinstance(val, datetime):
+                    return val
+                try:
+                    # typical formats in Excel: 18/06/2024 or 2024-06-18
+                    return pd.to_datetime(val, dayfirst=True).to_pydatetime()
+                except Exception:
+                    return None
             
             rate = models.AirFreightRate(
                 upload_id=upload_record.id,
-                airline=safe_str(row.iloc[0]),
-                product=safe_str(row.iloc[1]),
-                origin=safe_str(row.iloc[2]),
-                destination=safe_str(row.iloc[3]),
-                via=safe_str(row.iloc[4]),
-                relation_kg_m3=safe_float(row.iloc[5]),
-                fuel=safe_str(row.iloc[6]),
-                security_surcharge=safe_str(row.iloc[7]),
-                fixed=safe_str(row.iloc[8]),
-                min_rate=safe_float(row.iloc[9]),
-                normal_rate=safe_float(row.iloc[10]),
-                q45=safe_float(row.iloc[11]),
-                q100=safe_float(row.iloc[12]),
-                q300=safe_float(row.iloc[13]),
-                q500=safe_float(row.iloc[14]),
-                q1000=safe_float(row.iloc[15]),
-                q3000=safe_float(row.iloc[16]),
-                currency=safe_str(row.iloc[17])
+                airline=safe_str('Airline', 0),
+                gsa=safe_str('GSA') if 'GSA' in df.columns else None,
+                product=safe_str('Product', 1),
+                origin=safe_str('Origin', 2),
+                destination=safe_str('Destination', 3),
+                via=safe_str('Via', 4),
+                valid_from=safe_date('Valid') if 'Valid' in df.columns else None,
+                valid_until=safe_date('Expires') if 'Expires' in df.columns else None,
+                relation_kg_m3=safe_float('Relation Kg/m3', 5),
+                fuel=safe_str('Fuel', 6),
+                security_surcharge=safe_str('Security Surcharge', 7),
+                fixed=safe_str('Fixed', 8),
+                min_rate=safe_float('Min', 9),
+                normal_rate=safe_float('Normal', 10),
+                q45=safe_float('q45', 11),
+                q100=safe_float('q100', 12),
+                q300=safe_float('q300', 13),
+                q500=safe_float('q500', 14),
+                q1000=safe_float('q1000', 15),
+                q3000=safe_float('q3000', 16),
+                currency=safe_str('Currency', 17) or safe_str('Curr')
             )
             db.add(rate)
             saved_count += 1
