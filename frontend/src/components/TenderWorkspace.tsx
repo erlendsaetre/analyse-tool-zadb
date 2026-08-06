@@ -387,7 +387,6 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
                     <th colSpan={6} className="group-header group-dest">Destination Info</th>
                     <th colSpan={5} className="group-header group-req">Lane requirements</th>
                     <th colSpan={17} className="group-header group-rates">Rates (Buy & Sell)</th>
-                    <th colSpan={2} className="group-header group-extra">Extra</th>
                   </tr>
                   <tr>
                     <th className="group-pricing">O/A</th>
@@ -421,9 +420,6 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
                         <th className="group-rates col-sell">{b.label} (Salg)</th>
                       </React.Fragment>
                     ))}
-                    
-                    <th className="group-extra">Gyldig til</th>
-                    <th className="group-extra">Alle Metadata Felter</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -493,20 +489,8 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
                           );
                         })}
                         
-                        {/* Extra */}
-                        <td>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                            <input type="date" className="text-input" style={{ fontSize: '0.7rem', padding: '3px 6px', background: 'transparent', border: 'none' }}
-                              defaultValue={toDateInputValue(rate.valid_until || tender.valid_until)}
-                              onBlur={e => updateRateField(rate.id, { valid_until: e.target.value || null })} />
-                            {expiry && <span style={{ fontSize: '0.68rem', color: expiry.color, fontWeight: 600 }}>{expiry.label}</span>}
-                          </div>
-                        </td>
-                        <td style={{ maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                           <span title={JSON.stringify(meta, null, 2)} style={{ cursor: 'help', color: '#3b82f6', textDecoration: 'underline' }}>
-                             {Object.keys(meta).length} felter lagret...
-                           </span>
-                        </td>
+                          );
+                        })}
                       </tr>
                     );
                   })}
