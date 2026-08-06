@@ -62,6 +62,10 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
   // Expanded row (metadata viewer)
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
+  // Add lane form
+  const PICKUP_ZONES = ['A','B','C','D','E','F','G'];
+  const [newLane, setNewLane] = useState({ origin: 'OSL', destination: '', origin_zip: '', pickup_zone: '' });
+
   const fetchTender = async () => {
     try {
       const res = await fetch(`${API_BASE}/api/tenders/${tenderId}`);
@@ -112,6 +116,30 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates)
     });
+  };
+
+  const addLane = async () => {
+    if (!newLane.destination) { showToast('Fyll inn destinasjon'); return; }
+    try {
+      const extra: Record<string, string> = {};
+      if (newLane.pickup_zone) extra['Pick Up Zone [A / B / C / D / etc.]'] = newLane.pickup_zone;
+      const body: any = {
+        origin: newLane.origin.toUpperCase(),
+        destination: newLane.destination.toUpperCase(),
+        origin_zip: newLane.origin_zip || null,
+        origin_country: 'NO',
+        extra_data: Object.keys(extra).length > 0 ? JSON.stringify(extra) : null,
+      };
+      const res = await fetch(`${API_BASE}/api/tenders/${tenderId}/rates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) { const err = await res.json(); showToast(`Feil: ${err.detail}`); return; }
+      showToast(`✓ Lane ${newLane.origin}→${newLane.destination} lagt til`);
+      setNewLane({ origin: 'OSL', destination: '', origin_zip: '', pickup_zone: '' });
+      fetchTender();
+    } catch (e) { showToast('Kunne ikke legge til lane'); }
   };
 
   const handlePreview = async () => {
@@ -343,7 +371,7 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
           {(!tender.rates || tender.rates.length === 0) ? (
             <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
               <div style={{ fontSize: '2rem', marginBottom: '12px' }}>📭</div>
-              Ingen rater ennå. Importer en Excel-fil, eller legg til rater fra Dashboard.
+              Ingen lanes ennå. Bruk skjemaet nedenfor for å legge til lanes, eller last opp rater via Upload-siden.
             </div>
           ) : (
             <div className="table-container excel-table-container">
@@ -490,6 +518,45 @@ export default function TenderWorkspace({ tenderId, onBack }: TenderWorkspacePro
               </div>
             </div>
           )}
+
+          {/* ── Add Lane Form ── */}
+          <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+            <div style={{ color: '#9ca3af', fontSize: '0.8rem', fontWeight: 600, marginBottom: '10px' }}>➕ Legg til lane</div>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <div className="filter-group" style={{ minWidth: '80px' }}>
+                <label className="filter-label">Origin (IATA)</label>
+                <input type="text" className="text-input" value={newLane.origin}
+                  onChange={e => setNewLane({ ...newLane, origin: e.target.value.toUpperCase() })}
+                  placeholder="OSL" maxLength={3} style={{ textTransform: 'uppercase', width: '80px' }} />
+              </div>
+              <div className="filter-group" style={{ minWidth: '80px' }}>
+                <label className="filter-label">Destinasjon (IATA)</label>
+                <input type="text" className="text-input" value={newLane.destination}
+                  onChange={e => setNewLane({ ...newLane, destination: e.target.value.toUpperCase() })}
+                  placeholder="PVG" maxLength={3} style={{ textTransform: 'uppercase', width: '80px' }} />
+              </div>
+              <div className="filter-group" style={{ minWidth: '90px' }}>
+                <label className="filter-label">Origin ZIP</label>
+                <input type="text" className="text-input" value={newLane.origin_zip}
+                  onChange={e => setNewLane({ ...newLane, origin_zip: e.target.value })}
+                  placeholder="0001" style={{ width: '90px' }} />
+              </div>
+              <div className="filter-group" style={{ minWidth: '80px' }}>
+                <label className="filter-label">Pickup Zone</label>
+                <select className="text-input" value={newLane.pickup_zone}
+                  onChange={e => setNewLane({ ...newLane, pickup_zone: e.target.value })}
+                  style={{ width: '80px' }}>
+                  <option value="">-</option>
+                  {PICKUP_ZONES.map(z => <option key={z} value={z}>{z}</option>)}
+                </select>
+              </div>
+              <button className="btn btn-primary" onClick={addLane}
+                disabled={!newLane.destination}
+                style={{ whiteSpace: 'nowrap', height: 'fit-content', padding: '8px 16px' }}>
+                ➕ Legg til
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
