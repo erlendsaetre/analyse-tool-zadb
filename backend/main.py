@@ -6,6 +6,13 @@ from routers import upload, rates, uploads, tenders
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
+# Run database migrations to add any missing columns/tables
+try:
+    from migrate import run_migrations
+    run_migrations()
+except Exception as e:
+    print(f"Warning: Migration failed: {e}")
+
 app = FastAPI(title="Air Freight Rate Analysis API")
 
 # Setup CORS
